@@ -1,0 +1,209 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CONFIG>
+  <ProjectSession>
+    <Version Value="11"/>
+    <BuildModes Active="Default"/>
+    <Units Count="5">
+      <Unit0>
+        <Filename Value="jsontest.lpr"/>
+        <IsPartOfProject Value="True"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="741"/>
+        <CursorPos Y="771"/>
+        <UsageCount Value="3588"/>
+        <Loaded Value="True"/>
+      </Unit0>
+      <Unit1>
+        <Filename Value="json.pas"/>
+        <IsPartOfProject Value="True"/>
+        <EditorIndex Value="1"/>
+        <TopLine Value="1225"/>
+        <CursorPos Y="1256"/>
+        <UsageCount Value="3588"/>
+        <Loaded Value="True"/>
+      </Unit1>
+      <Unit2>
+        <Filename Value="ubufferedreader.pas"/>
+        <EditorIndex Value="-1"/>
+        <CursorPos X="3" Y="14"/>
+        <UsageCount Value="3588"/>
+      </Unit2>
+      <Unit3>
+        <Filename Value="/usr/local/share/fpcsrc/3.2.0/rtl/inc/objpash.inc"/>
+        <EditorIndex Value="3"/>
+        <TopLine Value="181"/>
+        <CursorPos X="20" Y="190"/>
+        <UsageCount Value="1794"/>
+        <Loaded Value="True"/>
+      </Unit3>
+      <Unit4>
+        <Filename Value="/usr/local/share/fpcsrc/3.2.0/rtl/objpas/sysutils/sysstrh.inc"/>
+        <EditorIndex Value="2"/>
+        <TopLine Value="106"/>
+        <CursorPos X="59" Y="124"/>
+        <UsageCount Value="25"/>
+        <Loaded Value="True"/>
+      </Unit4>
+    </Units>
+    <JumpHistory Count="30" HistoryIndex="29">
+      <Position1>
+        <Filename Value="json.pas"/>
+        <Caret Line="1255" TopLine="1229"/>
+      </Position1>
+      <Position2>
+        <Filename Value="json.pas"/>
+        <Caret Line="1257" TopLine="1229"/>
+      </Position2>
+      <Position3>
+        <Filename Value="json.pas"/>
+        <Caret Line="1259" TopLine="1229"/>
+      </Position3>
+      <Position4>
+        <Filename Value="json.pas"/>
+        <Caret Line="1260" TopLine="1229"/>
+      </Position4>
+      <Position5>
+        <Filename Value="json.pas"/>
+        <Caret Line="1261" TopLine="1229"/>
+      </Position5>
+      <Position6>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="780" TopLine="749"/>
+      </Position6>
+      <Position7>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="782" TopLine="749"/>
+      </Position7>
+      <Position8>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="780" TopLine="749"/>
+      </Position8>
+      <Position9>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="787" TopLine="749"/>
+      </Position9>
+      <Position10>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="791" TopLine="751"/>
+      </Position10>
+      <Position11>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="792" TopLine="752"/>
+      </Position11>
+      <Position12>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="794" TopLine="749"/>
+      </Position12>
+      <Position13>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="790" Column="44" TopLine="766"/>
+      </Position13>
+      <Position14>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="814" TopLine="768"/>
+      </Position14>
+      <Position15>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="788" TopLine="768"/>
+      </Position15>
+      <Position16>
+        <Filename Value="json.pas"/>
+        <Caret Line="1244" TopLine="1229"/>
+      </Position16>
+      <Position17>
+        <Filename Value="json.pas"/>
+        <Caret Line="1246" TopLine="1229"/>
+      </Position17>
+      <Position18>
+        <Filename Value="json.pas"/>
+        <Caret Line="188" Column="18" TopLine="166"/>
+      </Position18>
+      <Position19>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="753" Column="4" TopLine="743"/>
+      </Position19>
+      <Position20>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="790" Column="18" TopLine="767"/>
+      </Position20>
+      <Position21>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="788" TopLine="767"/>
+      </Position21>
+      <Position22>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="789" TopLine="767"/>
+      </Position22>
+      <Position23>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="790" Column="19" TopLine="757"/>
+      </Position23>
+      <Position24>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="788" TopLine="757"/>
+      </Position24>
+      <Position25>
+        <Filename Value="json.pas"/>
+        <Caret Line="1252" TopLine="1225"/>
+      </Position25>
+      <Position26>
+        <Filename Value="json.pas"/>
+        <Caret Line="1254" TopLine="1225"/>
+      </Position26>
+      <Position27>
+        <Filename Value="json.pas"/>
+        <Caret Line="1255" TopLine="1225"/>
+      </Position27>
+      <Position28>
+        <Filename Value="json.pas"/>
+        <Caret Line="1256" TopLine="1225"/>
+      </Position28>
+      <Position29>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="788" TopLine="757"/>
+      </Position29>
+      <Position30>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="790" TopLine="757"/>
+      </Position30>
+    </JumpHistory>
+    <RunParams>
+      <FormatVersion Value="2"/>
+      <Modes Count="0" ActiveMode=""/>
+    </RunParams>
+  </ProjectSession>
+  <Debugging>
+    <Watches Count="10">
+      <Item1>
+        <Expression Value="FStack"/>
+      </Item1>
+      <Item2>
+        <Expression Value="FBuf[FPos]"/>
+      </Item2>
+      <Item3>
+        <Expression Value="FToken"/>
+      </Item3>
+      <Item4>
+        <Expression Value="FPos"/>
+      </Item4>
+      <Item5>
+        <Expression Value="FLen"/>
+      </Item5>
+      <Item6>
+        <Expression Value="FState"/>
+      </Item6>
+      <Item7>
+        <Expression Value="FSavedStack"/>
+      </Item7>
+      <Item8>
+        <Expression Value="FSkip"/>
+      </Item8>
+      <Item9>
+        <Expression Value="FNumber"/>
+      </Item9>
+      <Item10>
+        <Expression Value="tmp_exp"/>
+      </Item10>
+    </Watches>
+  </Debugging>
+</CONFIG>
