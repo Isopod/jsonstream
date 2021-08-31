@@ -24,7 +24,7 @@ type
     jsDictKey,
     jsAfterDictKey,
     jsDictValue,
-    jsAfterDictValue,
+    jsAfterDictItem,
     jsNumber,
     jsBoolean,
     jsNull,
@@ -496,12 +496,14 @@ begin
   if exponent <> 0 then
     FNumber := FNumber + 'e' + IntToStr(exponent);
 
-  //FToken := jtNumber;
+
   if FNumberErr then
   begin               
     FState := jnError;
     StackPush(jsError);
-  end;
+  end
+  {else
+    FState := jnNumber; }
 end;
 
 procedure TJsonReader.GetToken;
@@ -583,7 +585,8 @@ begin
       jsDictValue:
       begin
         StackPop;
-        StackPush(jsAfterDictValue);
+        StackPop;
+        StackPush(jsAfterDictItem);
       end;
       jsListItem:
       begin
@@ -603,11 +606,19 @@ begin
   FSkip := Result in [jnDict, jnKey, jnList, jnNumber, jnString];
 end;
 
+function TJsonReader.State: TJsonState;
+begin
+  Result := FState;
+end;
+
 function TJsonReader.InternalAdvance: TJsonState;
 label
   start;
 begin
   start:
+
+  if (StackTop = jsError) and not FSkipError then
+    FPopUntil := 0;
 
   if FPopUntil < 0 then
   begin
@@ -627,7 +638,7 @@ begin
           FState := jnListEnd;
           break;
         end;
-        jsDictItem:
+        jsDictItem, jsAfterDictItem:
         begin
           FState := jnDictEnd;
           break;
@@ -636,6 +647,7 @@ begin
         begin
           FState := jnEOF;
           StackPush(jsInitial);
+          break;
         end;
       end;
     end;
@@ -844,21 +856,21 @@ begin
           StackPush(jsError);
         end;
       end;
-    jsAfterDictValue:
+    jsAfterDictItem:
       case FToken of
         jtComma:
         begin
-          StackPop; // AfterDictValue
+          StackPop; // AfterDictItem
           //StackPop; // DictItem
-          //StackPush(jsDictItem);
+          StackPush(jsDictItem);
           Inc(FPos);
           goto start;
         end;
         jtDictEnd:
         begin
           FState := jnDictEnd;
-          StackPop; // AfterDictValue
-          StackPop; // DictItem
+          StackPop; // AfterDictItem
+          //StackPop; // DictItem
           Reduce;
           Inc(FPos);
         end
@@ -876,19 +888,16 @@ begin
       SkipString;
     jsDictKey:
       SkipKey;
+
     jsError:
     begin
-      if FSkipError then
+      {if FSkipError then}
         FSkipError := false
-      else
-        FPopUntil := 0;
+      {else
+        FPopUntil := 0;   }
     end;
-  end;
-  Result := FState;
-end;
 
-function TJsonReader.State: TJsonState;
-begin
+  end;
   Result := FState;
 end;
 
@@ -924,7 +933,7 @@ begin
         exit;
       end;
     end;
-  until High(FStack) < FSkipUntil;
+  until (High(FStack) < FSkipUntil);
   FSkipUntil := MaxInt;//-1;
 end;
 
@@ -976,7 +985,7 @@ begin
   end;
 
   // Dict: missing comma
-  if (StackTop = jsAfterDictValue) and (FToken = jtString) then
+  if (StackTop = jsAfterDictItem) {and (FToken = jtString)} then
   begin
     StackPop;
     StackPush(jsDictItem);
@@ -986,16 +995,18 @@ begin
   // Dict: missing colon
   if StackTop = jsAfterDictKey then
   begin
-    StackPop;
-    StackPush(jsAfterDictValue);
+    StackPop; // AfterDictKey
+    StackPop; // DictItem
+    StackPush(jsAfterDictItem);
     exit;
   end;
 
   // Dict: missing value after colon
   if StackTop = jsDictValue then
   begin  
-    StackPop;
-    StackPush(jsAfterDictValue);
+    StackPop; // DictValue
+    StackPop; // DictItem
+    StackPush(jsAfterDictItem);
     exit;
   end;
 
@@ -1010,7 +1021,7 @@ begin
   // List closed, but node is not a list or
   // Dict closed, but node is not a dict
   if ((FToken = jtListEnd) and not (StackTop in [jsListItem, jsAfterListItem])) or
-     ((FToken = jtDictEnd) and not (StackTop in [jsDictItem, jsAfterDictValue])) then
+     ((FToken = jtDictEnd) and not (StackTop in [jsDictItem, jsAfterDictItem])) then
   begin
     case FToken of
       jtListEnd: Needle := jsListItem;
@@ -1040,11 +1051,19 @@ begin
     exit;
   end;
 
-  // We just informed the user that a number was misformatted according to the
-  // JSON spec, but we were still able to parse it, so we don't have to do
-  // anything special here, just continue.
-  if StackTop = jsNumber then
+  if FToken in [jtColon, jtComma] then
+  begin
+    Inc(FPos);
     exit;
+  end;
+
+  if StackTop = jsNumber then
+  begin
+    //StackPop;
+    //Reduce;
+    FState := jnNumber;
+    exit;
+  end;
 
   // If we could not fix the error, push the error state back on
   // TODO: Close stack
@@ -1217,6 +1236,12 @@ end;
 
 function TJsonReader.InitNumber: Boolean;
 begin
+  if (FState <> jnNumber) or (FToken <> jtNumber) then
+  begin
+    Result := False;
+    exit;
+  end;
+
   if FNumber = '' then
     ParseNumber;
 
