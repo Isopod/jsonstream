@@ -296,8 +296,6 @@ begin
 end;
 
 procedure TJsonReader.SkipNumber;
-var
-  dummy: integer;
 begin
   if FNumber = '' then
     ParseNumber;
@@ -371,13 +369,11 @@ end;
 procedure TJsonReader.ParseNumber;
 var
   Buf: array[0..768-1 + 1 { sign }] of char;
-  i, n, m:   integer;
+  i, n:   integer;
   exponent:  integer;
   leading_zeroes: integer;
   tmp_exp:   integer;
   tmp_exp_sign: integer;
-  dec_point: integer;
-  error:        boolean;
 
   function SkipZero: integer;
   var
@@ -421,7 +417,6 @@ var
   end;
 begin
   n        := 0;
-  m        := 0;
   exponent := 0;
   FNumber  := '';
   FNumberErr := false;
@@ -512,8 +507,6 @@ begin
     FState := jnError;
     StackPush(jsError);
   end
-  {else
-    FState := jnNumber; }
 end;
 
 procedure TJsonReader.GetToken;
@@ -535,7 +528,7 @@ begin
     ']':      FToken := jtListEnd;
     ',':      FToken := jtComma;
     ':':      FToken := jtColon;
-    '0'..'9', '-', '+': //ParseNumber;
+    '0'..'9', '-', '+':
               FToken := jtNumber;
     '"':      FToken := jtString;
     't':
@@ -747,14 +740,7 @@ begin
           StackPush(jsString);
           FFauxString := false;
           Inc(FPos);
-        end;  
-        jtListEnd:
-        begin
-          FState := jnListEnd;
-          StackPop;
-          Reduce;
-          Inc(FPos);
-        end
+        end;
         else
         begin
           FState := jnError;
@@ -973,7 +959,6 @@ end;
 
 procedure TJsonReader.Skip;
 begin
-  //SkipEx(false);
   FSkip := true;
 end;
 
@@ -1001,11 +986,6 @@ begin
   if (FToken = jtError) or
      (StackTop = jsDictItem) and (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
   begin
-    {while FToken = jtError do
-    begin
-      Inc(FPos);
-      GetToken;
-    end; }
     if StackTop = jsDictItem then
     begin
       StackPush(jsDictKey);
@@ -1033,7 +1013,7 @@ begin
   end;
 
   // Dict: missing comma
-  if (StackTop = jsAfterDictItem) {and (FToken = jtString)} then
+  if StackTop = jsAfterDictItem then
   begin
     StackPop;
     StackPush(jsDictItem);
@@ -1044,20 +1024,20 @@ begin
   if StackTop = jsAfterDictKey then
   begin
     StackPop; // AfterDictKey
+    {
     StackPop; // DictItem
     StackPush(jsAfterDictItem);
+    }              
+    StackPush(jsDictValue);
+    StackPush(jsNull);
+    FState := jnNull;
+    FSkip := true;
     exit;
   end;
 
   // Dict: missing value after colon
   if StackTop = jsDictValue then
-  begin  
-    //StackPop; // DictValue
-    //StackPop; // DictItem
-    //StackPush(jsAfterDictItem);
-    //if FToken = jtComma then
-    //  Inc(FPos);
-
+  begin
     StackPush(jsNull);
     FState := jnNull;
     FSkip := true;
@@ -1113,8 +1093,6 @@ begin
 
   if StackTop = jsNumber then
   begin
-    //StackPop;
-    //Reduce;
     FState := jnNumber;
     exit;
   end;
