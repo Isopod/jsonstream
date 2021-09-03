@@ -28,7 +28,8 @@ type
     jsNumber,
     jsBoolean,
     jsNull,
-    jsString
+    jsString,
+    jsFauxString
   );
 
   TJsonState = (
@@ -74,6 +75,9 @@ type
     FBuf:        array[0..1023] of Char;
     FLen:        integer;
     FPos:        integer;
+    // False for a regular string, true after error recovery when we encounter garbage tokens and
+    // fallback to interpreting them as a string.
+    FFauxString: boolean;
 
     FStack:      array of TJsonInternalState;
     FSavedStack: array of TJsonInternalState;
@@ -110,7 +114,8 @@ type
 
     // Skip helpers
     procedure SkipNumber;
-    procedure SkipBoolean;
+    procedure SkipBoolean;   
+    procedure SkipNull;
     procedure SkipString;
     procedure SkipKey;
 
@@ -304,6 +309,11 @@ begin
   FSkip  := false;
   StackPop;
   Reduce;
+end;
+
+procedure TJsonReader.SkipNull;
+begin
+  Null;
 end;
 
 procedure TJsonReader.SkipBoolean;
@@ -735,6 +745,7 @@ begin
         begin
           FState := jnString;
           StackPush(jsString);
+          FFauxString := false;
           Inc(FPos);
         end;  
         jtListEnd:
@@ -778,6 +789,7 @@ begin
         begin
           FState := jnKey;
           StackPush(jsDictKey);
+          FFauxString := false;
           Inc(FPos);
         end;
         jtDictEnd:
@@ -848,6 +860,7 @@ begin
         begin
           FState := jnString;
           StackPush(jsString);
+          FFauxString := false;
           Inc(FPos);
         end
         else
@@ -884,6 +897,8 @@ begin
       SkipNumber;
     jsBoolean:
       SkipBoolean;
+    jsNull:
+      SkipNull;
     jsString:
       SkipString;
     jsDictKey:
@@ -897,6 +912,23 @@ begin
         FPopUntil := 0;   }
     end;
 
+    // Tree for `{a : `:
+    //
+    //   jsList
+    //     jsListItem
+    //       jsListKey
+    //         jsFauxString
+    //
+    // Tree for `a`:
+    //
+    //   jsString
+    //     jsFauxString
+    //
+    // On error recovery, we push jsFauxString onto the stack in order to skip one Advance().
+    // Otherwise,  the next call to Advance() would skip the string before the user has the
+    // chance to read it.
+    jsFauxString:  
+      StackPop;
   end;
   Result := FState;
 end;
@@ -965,14 +997,30 @@ begin
   // Pop off the jsError state
   StackPop;
 
-  // Skip past garbage tokens
-  if FToken = jtError then
+  // Treat garbage tokens as string
+  if (FToken = jtError) or
+     (StackTop = jsDictItem) and (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
   begin
-    while FToken = jtError do
+    {while FToken = jtError do
     begin
       Inc(FPos);
       GetToken;
+    end; }
+    if StackTop = jsDictItem then
+    begin
+      StackPush(jsDictKey);
+      FState := jnKey;
+    end
+    else
+    begin
+      StackPush(jsString);
+      FState := jnString;
     end;
+    // Always push on jsFauxString to avoid skipping on next Advance().
+    StackPush(jsFauxString);
+    FFauxString := true;
+    FSkip := true;
+    exit;
   end;
 
   // List: missing comma
@@ -1004,14 +1052,20 @@ begin
   // Dict: missing value after colon
   if StackTop = jsDictValue then
   begin  
-    StackPop; // DictValue
-    StackPop; // DictItem
-    StackPush(jsAfterDictItem);
+    //StackPop; // DictValue
+    //StackPop; // DictItem
+    //StackPush(jsAfterDictItem);
+    //if FToken = jtComma then
+    //  Inc(FPos);
+
+    StackPush(jsNull);
+    FState := jnNull;
+    FSkip := true;
     exit;
   end;
 
   // Dict: Expected key, but got something else
-  if (StackTop = jsDictItem) and (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull]) then
+  if (StackTop = jsDictItem) and (FToken in [jtDict, jtList{, jtNumber, jtTrue, jtFalse, jtNull}]) then
   begin
     StackPush(jsDictValue);
     SkipEx(true);
@@ -1084,8 +1138,14 @@ function TJsonReader.StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
 var
   i0, i1, o0, o1: SizeInt;
   l: SizeInt;
+  stopchars: set of char;
 begin
   o0 := 0;
+
+  if FFauxString then
+    stopchars := [#0..#32, '\', ':', ',', '{', '}', '[', ']']
+  else
+    stopchars := ['\', '"'];
 
   while true do
   begin
@@ -1094,7 +1154,7 @@ begin
     o1 := o0;
     l  := Flen;
 
-    while (i1 < l) and (o1 < BufSize) and not (FBuf[i1] in ['\', '"']) do
+    while (i1 < l) and (o1 < BufSize) and not (FBuf[i1] in stopchars) do
     begin
       Inc(i1);
       Inc(o1);
@@ -1121,15 +1181,7 @@ begin
       continue;
     end;
 
-    if FBuf[FPos] = '"' then
-    begin
-      // End of string
-      //inc(FPos);
-      //StackPop;
-      //Reduce;
-      break;
-    end
-    else if FBuf[FPos] = '\' then
+    if FBuf[FPos] = '\' then
     begin
       Inc(FPos);
       RefillBuffer;
@@ -1145,6 +1197,14 @@ begin
       PChar(SizeInt(@Buf) + o1)^ := FBuf[FPos];
       Inc(FPos);
       inc(o1);
+    end
+    else {if FBuf[FPos] = '"' then }
+    begin
+      // End of string
+      //inc(FPos);
+      //StackPop;
+      //Reduce;
+      break;
     end;
   end;
 
@@ -1152,7 +1212,8 @@ begin
 
   if (Result = 0) and (StackTop <> jsError) then
   begin
-    Inc(FPos);
+    if not FFauxString then
+      Inc(FPos);
     Reduce;
   end;
 end;
@@ -1310,7 +1371,8 @@ begin
   StackPop;
   Reduce;
 
-  Result := true;
+  Result := true;   
+  FSkip  := false;
 end;
 
 function TJsonReader.Null: Boolean;
@@ -1324,7 +1386,8 @@ begin
   StackPop;
   Reduce;
 
-  Result := true;
+  Result := true;   
+  FSkip  := false;
 end;
 
 function TJsonReader.Dict: Boolean;
