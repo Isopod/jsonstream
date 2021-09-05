@@ -876,7 +876,6 @@ begin
         jtComma:
         begin
           StackPop; // AfterDictItem
-          //StackPop; // DictItem
           StackPush(jsDictItem);
           Inc(FPos);
           goto start;
@@ -885,7 +884,6 @@ begin
         begin
           FState := jnDictEnd;
           StackPop; // AfterDictItem
-          //StackPop; // DictItem
           Reduce;
           Inc(FPos);
         end
@@ -907,12 +905,7 @@ begin
       SkipKey;
 
     jsError:
-    begin
-      {if FSkipError then}
-        FSkipError := false
-      {else
-        FPopUntil := 0;   }
-    end;
+      FSkipError := false;
 
     // Tree for `{a : `:
     //
@@ -936,7 +929,6 @@ begin
     begin
       StackPop;
       Reduce;
-      //goto start;
     end;
   end;
   Result := FState;
@@ -962,20 +954,9 @@ begin
     case InternalAdvance of
       jnError:
       begin
-        {if AutoProceed then
-          Proceed
-        else
-        begin }
-          assert(High(FStack) > FSkipUntil);
-          {
-          FSavedStack := Copy(FStack, FSkipUntil, Length(FStack) - FSkipUntil);
-          SetLength(FStack, FSkipUntil);
-          // We cut off jsError from stack, add it back:
-          StackPush(jsError);
-          }
-          FSkipError := True;
-          exit;
-        {end;}
+        assert(High(FStack) > FSkipUntil);
+        FSkipError := True;
+        exit;
       end;
     end;
   until (High(FStack) < FSkipUntil);
@@ -999,14 +980,6 @@ begin
 
   FSkipError := false;
 
-  // Restore internal stack if necessary (see comment in SkipEx)
-  {
-  if Length(FSavedStack) > 0 then
-  begin
-    SetLength(FStack, FSkipUntil + Length(FSavedStack));
-    Move(FSavedStack[0], FStack[FSkipUntil], Length(FSavedStack));
-  end;
-  }
 
   // Pop off the jsError state
   StackPop;
@@ -1054,10 +1027,6 @@ begin
   if StackTop = jsAfterDictKey then
   begin
     StackPop; // AfterDictKey
-    {
-    StackPop; // DictItem
-    StackPush(jsAfterDictItem);
-    }              
     StackPush(jsDictValue);
     StackPush(jsFauxNull);
     FState := jnNull;
@@ -1078,7 +1047,6 @@ begin
   if (StackTop = jsDictItem) and (FToken in [jtDict, jtList{, jtNumber, jtTrue, jtFalse, jtNull}]) then
   begin
     StackPush(jsDictValue);
-    //SkipEx(true);    
     FSkip := true;
     exit;
   end;
@@ -1129,7 +1097,6 @@ begin
   end;
 
   // If we could not fix the error, push the error state back on
-  // TODO: Close stack
   StackPush(jsError);
 end;
 
@@ -1207,12 +1174,9 @@ begin
       Inc(FPos);
       inc(o1);
     end
-    else {if FBuf[FPos] = '"' then }
+    else
     begin
       // End of string
-      //inc(FPos);
-      //StackPop;
-      //Reduce;
       break;
     end;
   end;
@@ -1247,9 +1211,6 @@ begin
     Len := Len + Delta;
   end;
   SetLength(S, Len);
-
-  //StackPop;
-  //Reduce;
 end;
 
 function TJsonReader.Key(out K: String): Boolean;
@@ -1262,8 +1223,7 @@ begin
 
   Result := StrInternal(K);
   FSkip  := false;
-  //Advance;
-  InternalAdvance;
+  Advance;
 end;
 
 function TJsonReader.KeyBuf(out Buf; BufSize: SizeInt): SizeInt;
