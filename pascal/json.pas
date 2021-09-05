@@ -436,20 +436,32 @@ begin
 
   leading_zeroes := SkipZero;
 
+  RefillBuffer;
+
   // JSON does not allow leading zeroes
   if (leading_zeroes > 1) or
      (leading_zeroes > 0) and (FLen >= 0) and (FBuf[FPos] in ['0'..'9']) then
     FNumberErr := true;
 
-  if (leading_zeroes > 0) and (FBuf[FPos] = '.') then
+  if (leading_zeroes > 0) and not ((FLen >= 0) and (FBuf[FPos] in ['0'..'9'])) then
   begin
-    Inc(FPos);
-    RefillBuffer;
-    // JSON required digit after decimal point
-    if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
-      FNumberErr := true;
-    exponent := -SkipZero;
-    exponent := exponent - ReadDigits;
+    if (FLen >= 0) and (FBuf[FPos] = '.') then
+    begin
+      // 0.something
+      Inc(FPos);
+      RefillBuffer;
+      // JSON required digit after decimal point
+      if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
+        FNumberErr := true;
+      exponent := -SkipZero;
+      exponent := exponent - ReadDigits;
+    end
+    else
+    begin
+      // Just 0
+      Buf[0] := '0';
+      n := 1;
+    end;
   end
   else
   begin
