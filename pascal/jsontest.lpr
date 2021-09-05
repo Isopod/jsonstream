@@ -446,6 +446,10 @@ begin
       assert(false);
 
     Reader.Proceed;
+
+    if Reader.State <> jnNull then
+      assert(false);
+
     Reader.Advance;
 
     if Reader.State <> jnDictEnd then
@@ -605,6 +609,20 @@ begin
       assert(false);
 
     Reader.Proceed;
+    Reader.Advance;
+
+    if not Reader.Key(s) then
+      assert(false);
+    assert(s = '2');
+
+    if Reader.State <> jnError then
+      assert(false);
+
+    Reader.Proceed;
+
+    if Reader.State <> jnNull then
+      assert(false);
+
     Reader.Advance;
 
     if not Reader.Key(s) then

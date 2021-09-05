@@ -29,7 +29,8 @@ type
     jsBoolean,
     jsNull,
     jsString,
-    jsFauxString
+    jsFauxString,
+    jsFauxNull
   );
 
   TJsonState = (
@@ -119,7 +120,7 @@ type
     procedure SkipString;
     procedure SkipKey;
 
-    procedure SkipEx(AutoProceed: Boolean);
+    procedure SkipEx({AutoProceed: Boolean});
     function  InternalAdvance: TJsonState;
 
     // Key/Str helpers
@@ -604,7 +605,7 @@ end;
 function TJsonReader.Advance: TJsonState;
 begin
   if FSkip then
-    SkipEx(false);
+    SkipEx({false});
   Result := InternalAdvance;
   FSkip := Result in [jnDict, jnKey, jnList, jnNumber, jnString];
 end;
@@ -638,12 +639,14 @@ begin
       case StackPop of
         jsListItem, jsAfterListItem:
         begin
-          FState := jnListEnd;
+          FState := jnListEnd;  
+          FSkip := false;
           break;
         end;
         jsDictItem, jsAfterDictItem:
         begin
           FState := jnDictEnd;
+          FSkip := false;
           break;
         end;
         jsInitial:
@@ -651,7 +654,7 @@ begin
           FState := jnEOF;
           StackPush(jsInitial);
           break;
-        end;
+        end
       end;
     end;
     Result := FState;
@@ -782,7 +785,8 @@ begin
         begin
           FState := jnDictEnd;
           Inc(FPos);
-          StackPop;
+          StackPop;     
+          Reduce;
         end
         else
         begin
@@ -915,11 +919,18 @@ begin
     // chance to read it.
     jsFauxString:  
       StackPop;
+
+    jsFauxNull:
+    begin
+      StackPop;
+      Reduce;
+      //goto start;
+    end;
   end;
   Result := FState;
 end;
 
-procedure TJsonReader.SkipEx(AutoProceed: Boolean);
+procedure TJsonReader.SkipEx({AutoProceed: Boolean});
 begin
   // Consider what happens when an error occurs in an internal structure while
   // skipping an item.
@@ -936,19 +947,23 @@ begin
     FSkipUntil := High(FStack);
 
   repeat
-    if InternalAdvance = jnError then
-    begin
-      if AutoProceed then
-        Proceed
-      else
+    case InternalAdvance of
+      jnError:
       begin
-        assert(High(FStack) > FSkipUntil);
-        FSavedStack := Copy(FStack, FSkipUntil, Length(FStack) - FSkipUntil);
-        SetLength(FStack, FSkipUntil);
-        // We cut off jsError from stack, add it back:
-        StackPush(jsError);
-        FSkipError := True;
-        exit;
+        {if AutoProceed then
+          Proceed
+        else
+        begin }
+          assert(High(FStack) > FSkipUntil);
+          {
+          FSavedStack := Copy(FStack, FSkipUntil, Length(FStack) - FSkipUntil);
+          SetLength(FStack, FSkipUntil);
+          // We cut off jsError from stack, add it back:
+          StackPush(jsError);
+          }
+          FSkipError := True;
+          exit;
+        {end;}
       end;
     end;
   until (High(FStack) < FSkipUntil);
@@ -973,11 +988,13 @@ begin
   FSkipError := false;
 
   // Restore internal stack if necessary (see comment in SkipEx)
+  {
   if Length(FSavedStack) > 0 then
   begin
     SetLength(FStack, FSkipUntil + Length(FSavedStack));
     Move(FSavedStack[0], FStack[FSkipUntil], Length(FSavedStack));
   end;
+  }
 
   // Pop off the jsError state
   StackPop;
@@ -999,7 +1016,7 @@ begin
     // Always push on jsFauxString to avoid skipping on next Advance().
     StackPush(jsFauxString);
     FFauxString := true;
-    FSkip := true;
+    FSkip := false;//true;
     exit;
   end;
 
@@ -1013,7 +1030,8 @@ begin
   end;
 
   // Dict: missing comma
-  if StackTop = jsAfterDictItem then
+  if (StackTop = jsAfterDictItem) and
+     (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtString]) then
   begin
     StackPop;
     StackPush(jsDictItem);
@@ -1029,7 +1047,7 @@ begin
     StackPush(jsAfterDictItem);
     }              
     StackPush(jsDictValue);
-    StackPush(jsNull);
+    StackPush(jsFauxNull);
     FState := jnNull;
     FSkip := true;
     exit;
@@ -1038,7 +1056,7 @@ begin
   // Dict: missing value after colon
   if StackTop = jsDictValue then
   begin
-    StackPush(jsNull);
+    StackPush(jsFauxNull);
     FState := jnNull;
     FSkip := true;
     exit;
@@ -1048,7 +1066,8 @@ begin
   if (StackTop = jsDictItem) and (FToken in [jtDict, jtList{, jtNumber, jtTrue, jtFalse, jtNull}]) then
   begin
     StackPush(jsDictValue);
-    SkipEx(true);
+    //SkipEx(true);    
+    FSkip := true;
     exit;
   end;
 
@@ -1231,7 +1250,8 @@ begin
 
   Result := StrInternal(K);
   FSkip  := false;
-  Advance;
+  //Advance;
+  InternalAdvance;
 end;
 
 function TJsonReader.KeyBuf(out Buf; BufSize: SizeInt): SizeInt;
@@ -1361,11 +1381,11 @@ begin
     exit;
   end;
 
-  StackPop;
+  // When there is a parse error after a dict key, we inject a fake null value.
+  // Don't want to reset the skip flag in that case.
   Reduce;
-
-  Result := true;   
   FSkip  := false;
+  Result := true;
 end;
 
 function TJsonReader.Dict: Boolean;
