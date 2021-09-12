@@ -110,7 +110,7 @@ type
     procedure SkipSpace;
     function  MatchString(const str: string): Boolean;
     procedure ParseNumber;
-    function  InitNumber: Boolean;
+    //function  InitNumber: Boolean;
     procedure FinalizeNumber;
 
     // Skip helpers
@@ -120,7 +120,7 @@ type
     procedure SkipString;
     procedure SkipKey;
 
-    procedure SkipEx({AutoProceed: Boolean});
+    procedure SkipEx;
     function  InternalAdvance: TJsonState;
 
     // Key/Str helpers
@@ -298,9 +298,6 @@ end;
 
 procedure TJsonReader.SkipNumber;
 begin
-  if FNumber = '' then
-    ParseNumber;
-
   if FState <> jnNumber then
     Exit;
 
@@ -363,6 +360,9 @@ begin
   for i := 0 to length(str) - 1 do
     if FBuf[FPos + i] <> str[i + 1] then
       exit;
+
+  if (FLen > length(str)) and not (FBuf[FPos + length(str)] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) then
+    exit;
 
   Result := true;
 end;
@@ -515,6 +515,25 @@ begin
     FNumber := FNumber + 'e' + IntToStr(exponent);
 
 
+  // Check if there is garbage at the end
+  RefillBuffer;
+  if (FLen > 0) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) then
+  begin
+    StackPop; // Was never a number to begin with
+    StackPush(jsError);
+    FState := jnError;
+
+    // Skip rest of token
+    repeat
+      while (FPos < FLen) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) do
+        Inc(FPos);
+
+      RefillBuffer;
+    until (FPos < FLen) or (FLen <= 0);
+
+    exit;
+  end;
+
   if FNumberErr then
   begin               
     FState := jnError;
@@ -617,7 +636,7 @@ end;
 function TJsonReader.Advance: TJsonState;
 begin
   if FSkip then
-    SkipEx({false});
+    SkipEx;
   Result := InternalAdvance;
   FSkip := Result in [jnDict, jnKey, jnList, jnNumber, jnString];
 end;
@@ -730,6 +749,7 @@ begin
         begin
           FState := jnNumber;
           StackPush(jsNumber);
+          ParseNumber;
         end;
         jtTrue:
         begin
@@ -838,7 +858,8 @@ begin
         jtNumber:
         begin
           FState := jnNumber;
-          StackPush(jsNumber);
+          StackPush(jsNumber);   
+          ParseNumber;
         end;
         jtTrue:
         begin
@@ -934,7 +955,7 @@ begin
   Result := FState;
 end;
 
-procedure TJsonReader.SkipEx({AutoProceed: Boolean});
+procedure TJsonReader.SkipEx;
 begin
   // Consider what happens when an error occurs in an internal structure while
   // skipping an item.
@@ -1098,6 +1119,8 @@ begin
 
   // If we could not fix the error, push the error state back on
   StackPush(jsError);
+  // And pop the entire stack
+  FPopUntil := 0;
 end;
 
 function TJsonReader.LastError: integer;
@@ -1223,7 +1246,8 @@ begin
 
   Result := StrInternal(K);
   FSkip  := false;
-  Advance;
+  if FState <> jnError then
+    Advance;
 end;
 
 function TJsonReader.KeyBuf(out Buf; BufSize: SizeInt): SizeInt;
@@ -1265,20 +1289,6 @@ begin
   FSkip  := false;
 end;
 
-function TJsonReader.InitNumber: Boolean;
-begin
-  if (FState <> jnNumber) or (FToken <> jtNumber) then
-  begin
-    Result := False;
-    exit;
-  end;
-
-  if FNumber = '' then
-    ParseNumber;
-
-  Result := FState = jnNumber;
-end;
-
 procedure TJsonReader.FinalizeNumber;
 begin
   FNumber := '';
@@ -1289,7 +1299,13 @@ end;
 
 function TJsonReader.Number(out num: integer): Boolean;
 begin
-  Result := InitNumber and TryStrToInt(FNumber, num);
+  if (FState <> jnNumber) then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  Result := TryStrToInt(FNumber, num);
 
   if Result then
     FinalizeNumber;
@@ -1297,7 +1313,13 @@ end;
 
 function TJsonReader.Number(out num: int64): Boolean;
 begin
-  Result := InitNumber and TryStrToInt64(FNumber, num);
+  if (FState <> jnNumber) then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  Result := TryStrToInt64(FNumber, num);
 
   if Result then
     FinalizeNumber;
@@ -1305,7 +1327,13 @@ end;
 
 function TJsonReader.Number(out num: uint64): Boolean;
 begin
-  Result := InitNumber and TryStrToUInt64(FNumber, num);
+  if (FState <> jnNumber) then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  Result := TryStrToUInt64(FNumber, num);
 
   if Result then
     FinalizeNumber;
@@ -1318,7 +1346,13 @@ begin
   FormatSettings.DecimalSeparator := '.';
   FormatSettings.ThousandSeparator := #0;
 
-  Result := InitNumber and TryStrToFloat(FNumber, num, FormatSettings);
+  if (FState <> jnNumber) then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  Result := TryStrToFloat(FNumber, num, FormatSettings);
 
   if Result then
     FinalizeNumber;
@@ -1355,7 +1389,9 @@ begin
 
   // When there is a parse error after a dict key, we inject a fake null value.
   // Don't want to reset the skip flag in that case.
+  StackPop;
   Reduce;
+
   FSkip  := false;
   Result := true;
 end;
