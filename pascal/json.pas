@@ -20,11 +20,13 @@ type
     jsEOF,
     jsListItem,
     jsAfterListItem,
+    jsListComma,
     jsDictItem,
     jsDictKey,
     jsAfterDictKey,
     jsDictValue,
     jsAfterDictItem,
+    jsDictComma,
     jsNumber,
     jsBoolean,
     jsNull,
@@ -668,13 +670,13 @@ begin
       if High(FStack) <= FPopUntil then
         FPopUntil := -1;
       case StackPop of
-        jsListItem, jsAfterListItem:
+        jsListItem, jsAfterListItem, jsListComma:
         begin
           FState := jnListEnd;  
           FSkip := false;
           break;
         end;
-        jsDictItem, jsAfterDictItem:
+        jsDictItem, jsAfterDictItem, jsDictComma:
         begin
           FState := jnDictEnd;
           FSkip := false;
@@ -787,8 +789,7 @@ begin
         jtComma:
         begin
           StackPop;
-          StackPush(jsListItem);
-          Inc(FPos);
+          StackPush(jsListComma);
           goto start;
         end;
         jtListEnd:
@@ -804,6 +805,18 @@ begin
           StackPush(jsError);
         end;
       end;
+    jsListComma:
+      case FToken of
+        jtComma:
+        begin
+          StackPop;
+          StackPush(jsListItem);
+          Inc(FPos);
+          goto start;
+        end;
+        else
+          assert(false);
+      end;
     jsDictItem: 
       case FToken of
         jtString:
@@ -812,13 +825,6 @@ begin
           StackPush(jsDictKey);
           FFauxString := false;
           Inc(FPos);
-        end;
-        jtDictEnd:
-        begin
-          FState := jnDictEnd;
-          Inc(FPos);
-          StackPop;     
-          Reduce;
         end
         else
         begin
@@ -897,8 +903,7 @@ begin
         jtComma:
         begin
           StackPop; // AfterDictItem
-          StackPush(jsDictItem);
-          Inc(FPos);
+          StackPush(jsDictComma);
           goto start;
         end;
         jtDictEnd:
@@ -913,6 +918,18 @@ begin
           FState := jnError;
           StackPush(jsError);
         end;
+      end;
+    jsDictComma:
+      case FToken of
+        jtComma:
+        begin
+          StackPop; // jsDictComma
+          StackPush(jsDictItem);
+          Inc(FPos);
+          goto start;
+        end
+        else
+          assert(false);
       end;
     jsNumber:
       SkipNumber;
@@ -1074,6 +1091,7 @@ begin
 
   // List closed, but node is not a list or
   // Dict closed, but node is not a dict
+  // (this rule also catches trailing comma)
   if ((FToken = jtListEnd) and not (StackTop in [jsListItem, jsAfterListItem])) or
      ((FToken = jtDictEnd) and not (StackTop in [jsDictItem, jsAfterDictItem])) then
   begin
