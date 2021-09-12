@@ -637,7 +637,7 @@ end;
 
 function TJsonReader.Advance: TJsonState;
 begin
-  if FSkip then
+  if (FSkipUntil < High(FStack)) or FSkip then
     SkipEx;
   Result := InternalAdvance;
   FSkip := Result in [jnDict, jnKey, jnList, jnNumber, jnString];
@@ -1265,7 +1265,7 @@ begin
   Result := StrInternal(K);
   FSkip  := false;
   if FState <> jnError then
-    Advance;
+    InternalAdvance;
 end;
 
 function TJsonReader.KeyBuf(out Buf; BufSize: SizeInt): SizeInt;
@@ -1280,7 +1280,7 @@ begin
   FSkip  := false;
 
   if (Result = 0) and (BufSize > 0) then
-    Advance;
+    InternalAdvance;
 end;
 
 function TJsonReader.Str(out S: String): Boolean;

@@ -576,7 +576,7 @@ var
   Stream: TStream;
   Reader: TJsonReader;
   num:    integer;
-  s:      string;
+  i:      integer;
 const
   sample = '[1,{2,"a":"b"},3]';
 begin
@@ -601,42 +601,17 @@ begin
     if not Reader.Dict then
       assert(false);
 
-    //Reader.Skip;
+    Reader.Skip;
 
-    Reader.Advance;    
+    for i := 0 to 1 do
+    begin       
+      Reader.Advance;
 
-    if Reader.State <> jnError then
-      assert(false);
+      if Reader.State <> jnError then
+        assert(false);
 
-    Reader.Proceed;
-    Reader.Advance;
-
-    if not Reader.Key(s) then
-      assert(false);
-    assert(s = '2');
-
-    if Reader.State <> jnError then
-      assert(false);
-
-    Reader.Proceed;
-
-    if Reader.State <> jnNull then
-      assert(false);
-
-    Reader.Advance;
-
-    if not Reader.Key(s) then
-      assert(false);
-    assert(s = 'a');
-
-    if not Reader.Str(s) then
-      assert(false);
-    assert(s = 'b');
-
-    Reader.Advance;
-
-    if Reader.State <> jnDictEnd then
-      assert(false);
+      Reader.Proceed;
+    end;
 
     Reader.Advance;
 
