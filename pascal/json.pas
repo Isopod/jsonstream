@@ -18,21 +18,22 @@ type
     jsInitial,
     jsError,
     jsEOF,
-    jsListItem,
+    jsListHead,
     jsAfterListItem,
-    jsListComma,
+    jsListItem,
+    jsDictHead,
     jsDictItem,
+    jsAfterDictItem,
     jsDictKey,
     jsAfterDictKey,
     jsDictValue,
-    jsAfterDictItem,
-    jsDictComma,
     jsNumber,
     jsBoolean,
     jsNull,
     jsString,
     jsFauxString,
-    jsFauxNull
+    jsFauxNull,
+    jsFauxNumber
   );
 
   TJsonState = (
@@ -122,7 +123,6 @@ type
     procedure SkipString;
     procedure SkipKey;
 
-    procedure SkipEx;
     function  InternalAdvance: TJsonState;
 
     // Key/Str helpers
@@ -625,7 +625,7 @@ begin
         StackPop;
         StackPush(jsAfterDictItem);
       end;
-      jsListItem:
+      jsListHead, jsListItem:
       begin
         StackPop;
         StackPush(jsAfterListItem);
@@ -636,10 +636,36 @@ begin
 end;
 
 function TJsonReader.Advance: TJsonState;
+var
+  NewSkip: integer;
 begin
-  if (FSkipUntil < High(FStack)) or FSkip then
-    SkipEx;
-  Result := InternalAdvance;
+  if StackTop in [jsListHead, jsDictHead] then
+    NewSkip := High(FStack) - 1
+  else
+    NewSkip := High(FStack);
+
+  if FSkip and (NewSkip < FSkipUntil) then
+    FSkipUntil := NewSkip;
+
+  while true do
+  begin
+    case InternalAdvance of
+      jnError:
+      begin
+        FSkipError := True;
+        break;
+      end;
+    end;  
+    if High(FStack) <= FSkipUntil then
+    begin
+      if (FSkipUntil < MaxInt) and (StackTop in [jsAfterListItem, jsAfterDictItem]) then
+        InternalAdvance;
+      FSkipUntil := MaxInt;
+      break;
+    end;
+  end;
+
+  Result := FState;
   FSkip := Result in [jnDict, jnKey, jnList, jnNumber, jnString];
 end;
 
@@ -670,16 +696,18 @@ begin
       if High(FStack) <= FPopUntil then
         FPopUntil := -1;
       case StackPop of
-        jsListItem, jsAfterListItem, jsListComma:
+        jsListItem, jsListHead, jsAfterListItem:
         begin
           FState := jnListEnd;  
           FSkip := false;
+          Reduce;
           break;
         end;
-        jsDictItem, jsAfterDictItem, jsDictComma:
+        jsDictItem, jsDictHead, jsAfterDictItem:
         begin
           FState := jnDictEnd;
           FSkip := false;
+          Reduce;
           break;
         end;
         jsInitial:
@@ -706,13 +734,13 @@ begin
         jtDict:
         begin
           FState := jnDict;
-          StackPush(jsDictItem);
+          StackPush(jsDictHead);
           Inc(FPos);
         end;
         jtList:
         begin
           FState := jnList;
-          StackPush(jsListItem);
+          StackPush(jsListHead);
           Inc(FPos);
         end
         {
@@ -733,18 +761,18 @@ begin
       end;
     jsEOF:
       FState := jnEOF;
-    jsListItem: 
+    jsListItem, jsListHead:
       case FToken of
         jtDict:
         begin
           FState := jnDict;
-          StackPush(jsDictItem);
+          StackPush(jsDictHead);
           Inc(FPos);
         end;
         jtList:
         begin
           FState := jnList;
-          StackPush(jsListItem);
+          StackPush(jsListHead);
           Inc(FPos);
         end;
         jtNumber:
@@ -778,6 +806,21 @@ begin
           FFauxString := false;
           Inc(FPos);
         end;
+        jtListEnd:
+        begin
+          if StackTop = jsListHead then
+          begin
+            FState := jnListEnd;
+            StackPop;
+            Reduce;
+            Inc(FPos);
+          end
+          else
+          begin
+            FState := jnError;
+            StackPush(jsError);
+          end;
+        end
         else
         begin
           FState := jnError;
@@ -789,7 +832,8 @@ begin
         jtComma:
         begin
           StackPop;
-          StackPush(jsListComma);
+          StackPush(jsListItem);
+          Inc(FPos);    
           goto start;
         end;
         jtListEnd:
@@ -805,19 +849,7 @@ begin
           StackPush(jsError);
         end;
       end;
-    jsListComma:
-      case FToken of
-        jtComma:
-        begin
-          StackPop;
-          StackPush(jsListItem);
-          Inc(FPos);
-          goto start;
-        end;
-        else
-          assert(false);
-      end;
-    jsDictItem: 
+    jsDictItem, jsDictHead:
       case FToken of
         jtString:
         begin
@@ -825,6 +857,21 @@ begin
           StackPush(jsDictKey);
           FFauxString := false;
           Inc(FPos);
+        end;
+        jtDictEnd:
+        begin
+          if StackTop = jsDictHead then
+          begin
+            FState := jnDictEnd;
+            StackPop; // DictItem
+            Reduce;
+            Inc(FPos);
+          end
+          else
+          begin
+            FState := jnError;
+            StackPush(jsError);
+          end;
         end
         else
         begin
@@ -852,13 +899,13 @@ begin
         jtDict:
         begin
           FState := jnDict;
-          StackPush(jsDictItem);
+          StackPush(jsDictHead);
           Inc(FPos);
         end;
         jtList:
         begin
           FState := jnList;
-          StackPush(jsListItem);
+          StackPush(jsListHead);
           Inc(FPos);
         end;
         jtNumber:
@@ -903,7 +950,8 @@ begin
         jtComma:
         begin
           StackPop; // AfterDictItem
-          StackPush(jsDictComma);
+          StackPush(jsDictItem);
+          Inc(FPos);
           goto start;
         end;
         jtDictEnd:
@@ -918,18 +966,6 @@ begin
           FState := jnError;
           StackPush(jsError);
         end;
-      end;
-    jsDictComma:
-      case FToken of
-        jtComma:
-        begin
-          StackPop; // jsDictComma
-          StackPush(jsDictItem);
-          Inc(FPos);
-          goto start;
-        end
-        else
-          assert(false);
       end;
     jsNumber:
       SkipNumber;
@@ -948,7 +984,7 @@ begin
     // Tree for `{a : `:
     //
     //   jsList
-    //     jsListItem
+    //     jsListHead
     //       jsListKey
     //         jsFauxString
     //
@@ -963,7 +999,7 @@ begin
     jsFauxString:  
       StackPop;
 
-    jsFauxNull:
+    jsFauxNull, jsFauxNumber:
     begin
       StackPop;
       Reduce;
@@ -971,37 +1007,6 @@ begin
   end;
   Result := FState;
 end;
-
-procedure TJsonReader.SkipEx;
-begin
-  // Consider what happens when an error occurs in an internal structure while
-  // skipping an item.
-  // In that case, when we return, the internal stack will have more items than
-  // the user expects. This will cause errors because the user expects to get
-  // the appropriate ListEnd / DictEnd states for the items that were on the
-  // stack before Skip was called.
-  // We can fix this by removing the internal items from the stack. However,
-  // when the user calls Proceed on the error, we want to proceed from where we
-  // left off internally, so instead of outright deleting the items here, we
-  // back them up into FSavedStack, so that we can restore them in Proceed.
-
-  if High(FStack) < FSkipUntil then
-    FSkipUntil := High(FStack);
-
-  repeat
-    case InternalAdvance of
-      jnError:
-      begin
-        assert(High(FStack) > FSkipUntil);
-        FSkipError := True;
-        exit;
-      end;
-    end;
-  until (High(FStack) < FSkipUntil);
-  FSkipUntil := MaxInt;//-1;
-end;
-
-
 
 procedure TJsonReader.Skip;
 begin
@@ -1011,22 +1016,21 @@ end;
 procedure TJsonReader.Proceed;
 var
   i: integer;
-  Needle: TJsonInternalState;
+  Needle: set of TJsonInternalState;
 begin
   if FState <> jnError then
     exit;
 
   FSkipError := false;
 
-
   // Pop off the jsError state
   StackPop;
 
   // Treat garbage tokens as string
   if (FToken = jtError) or
-     (StackTop = jsDictItem) and (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
+     (StackTop in [jsDictHead, jsDictItem]) and (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
   begin
-    if StackTop = jsDictItem then
+    if StackTop in [jsDictHead, jsDictItem] then
     begin
       StackPush(jsDictKey);
       FState := jnKey;
@@ -1082,7 +1086,7 @@ begin
   end;
 
   // Dict: Expected key, but got something else
-  if (StackTop = jsDictItem) and (FToken in [jtDict, jtList{, jtNumber, jtTrue, jtFalse, jtNull}]) then
+  if (StackTop in [jsDictHead, jsDictItem]) and (FToken in [jtDict, jtList{, jtNumber, jtTrue, jtFalse, jtNull}]) then
   begin
     StackPush(jsDictValue);
     FSkip := true;
@@ -1092,12 +1096,12 @@ begin
   // List closed, but node is not a list or
   // Dict closed, but node is not a dict
   // (this rule also catches trailing comma)
-  if ((FToken = jtListEnd) and not (StackTop in [jsListItem, jsAfterListItem])) or
-     ((FToken = jtDictEnd) and not (StackTop in [jsDictItem, jsAfterDictItem])) then
+  if ((FToken = jtListEnd) and not (StackTop in [jsListHead, jsAfterListItem])) or
+     ((FToken = jtDictEnd) and not (StackTop in [jsDictHead, jsAfterDictItem])) then
   begin
     case FToken of
-      jtListEnd: Needle := jsListItem;
-      jtDictEnd: Needle := jsDictItem;
+      jtListEnd: Needle := [jsListItem, jsListHead];
+      jtDictEnd: Needle := [jsDictItem, jsDictHead];
       else       assert(false);
     end;
 
@@ -1105,7 +1109,7 @@ begin
     // TODO: This is O(stack depth), therefore a potential performance bottle-
     // neck. It could be implemented in O(1).
     i := High(FStack);
-    while (i >= 0) and (FStack[i] <> Needle) do
+    while (i >= 0) and not (FStack[i] in Needle) do
       dec(i);
 
     if i < 0 then
@@ -1130,8 +1134,10 @@ begin
   end;
 
   if StackTop = jsNumber then
-  begin
+  begin               
+    StackPush(jsFauxNumber);
     FState := jnNumber;
+    FSkip := false;//true;
     exit;
   end;
 
@@ -1139,6 +1145,7 @@ begin
   StackPush(jsError);
   // And pop the entire stack
   FPopUntil := 0;
+  FSkip := false;
 end;
 
 function TJsonReader.LastError: integer;
