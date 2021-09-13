@@ -10,7 +10,7 @@ uses
 type
 
   TJsonToken = (
-    jtError, jtEOF, jtDict, jtDictEnd, jtList, jtListEnd, jtComma, jtColon,
+    jtUnknown, jtEOF, jtDict, jtDictEnd, jtList, jtListEnd, jtComma, jtColon,
     jtNumber, jtString, jtFalse, jtTrue, jtNull
   );
 
@@ -48,6 +48,15 @@ type
     jnNull,
     jnString,
     jnKey
+  );
+
+  TJsonError = (
+    jeInvalidToken,
+    jeInvalidNumber,
+    jeUnexpectedToken,
+    jeUnexpectedListEnd,
+    jeUnexpectedDictEnd,
+    jeUnexpectedEOF
   );
 
   PJsonState = ^TJsonState;
@@ -96,7 +105,7 @@ type
     // Whether current item should be skipped upon next call to Advance.
     FSkip:       Boolean;
 
-    FLastError:  integer;
+    FLastError:  TJsonError;
     FLastErrorMessage: string;
 
     // Tokenizer
@@ -111,7 +120,7 @@ type
     // Parsing helpers
     procedure RefillBuffer;
     procedure SkipSpace;
-    function  MatchString(const str: string): Boolean;
+    function  MatchString(const Str: string): Boolean;
     procedure ParseNumber;
     //function  InitNumber: Boolean;
     procedure FinalizeNumber;
@@ -123,14 +132,15 @@ type
     procedure SkipString;
     procedure SkipKey;
 
-    function  InternalAdvance: TJsonState;
-
     // Key/Str helpers
     function  StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
     function  StrInternal(out S: String): Boolean;
+
+    // Internal functions
+    function  InternalAdvance: TJsonState;
+    procedure InvalidOrUnexpectedToken(const Msg: string);
   public
     constructor Create(Stream: TStream);
-
 
     // === General traversal ===
 
@@ -189,22 +199,22 @@ type
     function  StrBuf(out Buf; BufSize: SizeInt): SizeInt;
 
     // Returns true iff the current element is a number that can be exactly
-    // represented by an integer and returns its value in num.
-    function  Number(out num: integer): Boolean; overload;
+    // represented by an integer and returns its value in Num.
+    function  Number(out Num: integer): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
-    // represented by an int64 and returns its value in num.
-    function  Number(out num: int64): Boolean; overload;
+    // represented by an int64 and returns its value in Num.
+    function  Number(out Num: int64): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
-    // represented by an uint64 and returns its value in num.
-    function  Number(out num: uint64): Boolean; overload;
+    // represented by an uint64 and returns its value in Num.
+    function  Number(out Num: uint64): Boolean; overload;
     // Returns true iff the current element is a number and returns its value 
-    // in num. If the number exceeds the representable precision or range of a
+    // in Num. If the number exceeds the representable precision or range of a
     // double precision float, it will be rounded to the closest approximation.
-    function  Number(out num: double): Boolean; overload;
+    function  Number(out Num: double): Boolean; overload;
 
     // Returns true iff the current element is a boolean and returns its value
     // in bool.
-    function  Bool(out bool: Boolean): Boolean;
+    function  Bool(out Bool: Boolean): Boolean;
 
     // Returns true iff the current element is a null value.
     function  Null: Boolean;
@@ -233,7 +243,7 @@ type
 
     // Return last error code. A return value of 0 means that there was no
     // error. A return value other than 0 indicates that there was an error.
-    function  LastError: integer;
+    function LastError: TJsonError;
 
     // Return error message for last error.
     function  LastErrorMessage: string;
@@ -339,14 +349,14 @@ begin
   Key(dummy);
 end;
 
-function TJsonReader.MatchString(const str: string): Boolean;
+function TJsonReader.MatchString(const Str: string): Boolean;
 var
   n: SizeInt;
   i: integer;
 begin
   Result := false;
 
-  if FLen - FPos < length(str) then
+  if FLen - FPos < length(Str) then
   begin
     Move(FBuf[FPos], FBuf[0], FLen - FPos);
     FLen := FLen - FPos;
@@ -356,14 +366,14 @@ begin
       FLen := FLen + n;
   end;
 
-  if FLen < length(str) then
+  if FLen < length(Str) then
     exit;
 
-  for i := 0 to length(str) - 1 do
-    if FBuf[FPos + i] <> str[i + 1] then
+  for i := 0 to length(Str) - 1 do
+    if FBuf[FPos + i] <> Str[i + 1] then
       exit;
 
-  if (FLen > length(str)) and not (FBuf[FPos + length(str)] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) then
+  if (FLen > length(Str)) and not (FBuf[FPos + length(Str)] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) then
     exit;
 
   Result := true;
@@ -373,10 +383,10 @@ procedure TJsonReader.ParseNumber;
 var
   Buf: array[0..768-1 + 1 { sign }] of char;
   i, n:   integer;
-  exponent:  integer;
-  leading_zeroes: integer;
-  tmp_exp:   integer;
-  tmp_exp_sign: integer;
+  Exponent:  integer;
+  LeadingZeroes: integer;
+  TmpExp:   integer;
+  TmpExpSign: integer;
 
   function SkipZero: integer;
   var
@@ -420,7 +430,7 @@ var
   end;
 begin
   n        := 0;
-  exponent := 0;
+  Exponent := 0;
   FNumber  := '';
   FNumberErr := false;
 
@@ -428,7 +438,11 @@ begin
   begin
     // Leading + not allowed by JSON
     if (FBuf[FPos] = '+') then
-      FNumberErr := true;
+    begin
+      FNumberErr := true;  
+      FLastError := jeInvalidNumber;
+      FLastErrorMessage := 'Invalid number: JSON does not allow leading `+`.';
+    end;
 
     Buf[n] := FBuf[FPos];
     Inc(n);
@@ -436,16 +450,20 @@ begin
     RefillBuffer;
   end;
 
-  leading_zeroes := SkipZero;
+  LeadingZeroes := SkipZero;
 
   RefillBuffer;
 
   // JSON does not allow leading zeroes
-  if (leading_zeroes > 1) or
-     (leading_zeroes > 0) and (FLen >= 0) and (FBuf[FPos] in ['0'..'9']) then
-    FNumberErr := true;
+  if (LeadingZeroes > 1) or
+     (LeadingZeroes > 0) and (FLen >= 0) and (FBuf[FPos] in ['0'..'9']) then
+  begin
+    FNumberErr := true;   
+    FLastError := jeInvalidNumber;
+    FLastErrorMessage := 'Invalid number: JSON does not allow leading zeroes.';
+  end;
 
-  if (leading_zeroes > 0) and not ((FLen >= 0) and (FBuf[FPos] in ['0'..'9'])) then
+  if (LeadingZeroes > 0) and not ((FLen >= 0) and (FBuf[FPos] in ['0'..'9'])) then
   begin
     if (FLen >= 0) and (FBuf[FPos] = '.') then
     begin
@@ -454,9 +472,13 @@ begin
       RefillBuffer;
       // JSON required digit after decimal point
       if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
-        FNumberErr := true;
-      exponent := -SkipZero;
-      exponent := exponent - ReadDigits;
+      begin
+        FNumberErr := true;  
+        FLastError := jeInvalidNumber;
+        FLastErrorMessage := 'Invalid number: Expected digit after decimal point.';
+      end;
+      Exponent := -SkipZero;
+      Exponent := Exponent - ReadDigits;
     end
     else
     begin
@@ -476,8 +498,12 @@ begin
       RefillBuffer;
       // JSON required digit after decimal point
       if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
-        FNumberErr := true;
-      exponent := -ReadDigits;
+      begin
+        FNumberErr := true; 
+        FLastError := jeInvalidNumber;
+        FLastErrorMessage := 'Invalid number: Expected digit after decimal point.';
+      end;
+      Exponent := -ReadDigits;
     end;
   end;
 
@@ -485,12 +511,12 @@ begin
   begin
     Inc(FPos);
     RefillBuffer;
-    tmp_exp := 0;
-    tmp_exp_sign := +1;
+    TmpExp := 0;
+    TmpExpSign := +1;
     if (FBuf[FPos] in ['-', '+']) then
     begin
       if FBuf[FPos] = '-' then
-        tmp_exp_sign := -1;
+        TmpExpSign := -1;
       Inc(FPos);
       RefillBuffer;
     end;
@@ -501,20 +527,20 @@ begin
     begin
       if not (FBuf[FPos] in ['0'..'9']) then
         break;
-      // The exponent range for double is from like -324 to +308 or something,
+      // The Exponent range for double is from like -324 to +308 or something,
       // we just want to make sure we don't overflow. Everything below or above
       // will be rounded to -INF or +INF anyway.
-      if tmp_exp < 10000 then
-        tmp_exp := tmp_exp * 10 + (ord(FBuf[FPos]) - ord('0'));
+      if TmpExp < 10000 then
+        TmpExp := TmpExp * 10 + (ord(FBuf[FPos]) - ord('0'));
 
       Inc(FPos);
     end;
-    exponent := exponent + tmp_exp_sign * tmp_exp;
+    Exponent := Exponent + TmpExpSign * TmpExp;
   end;
 
   FNumber := Copy(Buf, 1, n);
-  if exponent <> 0 then
-    FNumber := FNumber + 'e' + IntToStr(exponent);
+  if Exponent <> 0 then
+    FNumber := FNumber + 'e' + IntToStr(Exponent);
 
 
   // Check if there is garbage at the end
@@ -524,6 +550,8 @@ begin
     StackPop; // Was never a number to begin with
     StackPush(jsError);
     FState := jnError;
+    FLastError := jeInvalidToken;
+    FLastErrorMessage := 'Invalid token.';
 
     // Skip rest of token
     repeat
@@ -569,19 +597,19 @@ begin
       if MatchString('true') then
         FToken := jtTrue
       else
-        FToken := jtError;
+        FToken := jtUnknown;
     'f':
       if MatchString('false') then
         FToken := jtFalse
       else
-        FToken := jtError;
+        FToken := jtUnknown;
     'n':
       if MatchString('null') then
         FToken := jtNull
       else
-        FToken := jtError;
+        FToken := jtUnknown;
     else
-      FToken := jtError;
+      FToken := jtUnknown;
   end;
 end;
 
@@ -747,15 +775,17 @@ begin
         jtNumber:
           FState := jnNumber;
           StackPush(jsNumber);
-          // DO NOT Inc(FPos)
+          ParseNumber;
         jtString:
           FState := jnString;
           StackPush(jsString);
+          FFauxString := false;
           Inc(FPos);
         }
         else
         begin
           FState := jnError;
+          InvalidOrUnexpectedToken('Expected `[` or `{`.');
           StackPush(jsError);
         end;
       end;
@@ -818,12 +848,15 @@ begin
           else
           begin
             FState := jnError;
+            FLastError := jeUnexpectedListEnd;
+            FLastErrorMessage := 'Unexpected end of list (`]`). Note: JSON does not allow trailing comma.';
             StackPush(jsError);
           end;
         end
         else
         begin
           FState := jnError;
+          InvalidOrUnexpectedToken('Expected `[` or `{`, number, boolean, string or null.');
           StackPush(jsError);
         end;
       end;
@@ -845,7 +878,8 @@ begin
         end
         else
         begin
-          FState := jnError;
+          FState := jnError;   
+          InvalidOrUnexpectedToken('Expected `,` or `]`.');
           StackPush(jsError);
         end;
       end;
@@ -870,12 +904,15 @@ begin
           else
           begin
             FState := jnError;
+            FLastError := jeUnexpectedDictEnd;    
+            FLastErrorMessage := 'Unexpected end of dict (`}`). Note: JSON does not allow trailing comma.';
             StackPush(jsError);
           end;
         end
         else
         begin
-          FState := jnError;
+          FState := jnError;   
+          InvalidOrUnexpectedToken('Expected string or `}`.');
           StackPush(jsError);
         end;
       end;
@@ -890,7 +927,8 @@ begin
         end
         else
         begin
-          FState := jnError;
+          FState := jnError;  
+          InvalidOrUnexpectedToken('Expected `:`.');
           StackPush(jsError);
         end;
       end;
@@ -941,7 +979,8 @@ begin
         end
         else
         begin
-          FState := jnError;
+          FState := jnError;    
+          InvalidOrUnexpectedToken('Expected `[`, `{`, number, boolean, string or null.');
           StackPush(jsError);
         end;
       end;
@@ -963,7 +1002,8 @@ begin
         end
         else
         begin
-          FState := jnError;
+          FState := jnError;    
+          InvalidOrUnexpectedToken('Expected `,` or `}`.');
           StackPush(jsError);
         end;
       end;
@@ -1008,6 +1048,27 @@ begin
   Result := FState;
 end;
 
+procedure TJsonReader.InvalidOrUnexpectedToken(const Msg: string);
+begin
+  case FToken of
+    jtUnknown:
+    begin
+      FLastError := jeInvalidToken;
+      FLastErrorMessage := Format('Unexpected character (`%s`). %s', [FBuf[FPos], Msg]);
+    end;
+    jtEOF:
+    begin
+      FLastError := jeUnexpectedEOF;
+      FLastErrorMessage := Format('Unexpected end-of-file. %s', [Msg]);
+    end
+    else
+    begin
+      FLastError := jeUnexpectedToken;
+      FLastErrorMessage := Format('Unexpected character (`%s`). %s', [FBuf[FPos], Msg]);
+    end;
+  end;
+end;
+
 procedure TJsonReader.Skip;
 begin
   FSkip := true;
@@ -1027,7 +1088,7 @@ begin
   StackPop;
 
   // Treat garbage tokens as string
-  if (FToken = jtError) or
+  if (FToken = jtUnknown) or
      (StackTop in [jsDictHead, jsDictItem]) and (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
   begin
     if StackTop in [jsDictHead, jsDictItem] then
@@ -1148,7 +1209,7 @@ begin
   FSkip := false;
 end;
 
-function TJsonReader.LastError: integer;
+function TJsonReader.LastError: TJsonError;
 begin
   Result := FLastError;
 end;
@@ -1162,14 +1223,14 @@ function TJsonReader.StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
 var
   i0, i1, o0, o1: SizeInt;
   l: SizeInt;
-  stopchars: set of char;
+  StopChars: set of char;
 begin
   o0 := 0;
 
   if FFauxString then
-    stopchars := [#0..#32, '\', ':', ',', '{', '}', '[', ']']
+    StopChars := [#0..#32, '\', ':', ',', '{', '}', '[', ']']
   else
-    stopchars := ['\', '"'];
+    StopChars := ['\', '"'];
 
   while true do
   begin
@@ -1178,7 +1239,7 @@ begin
     o1 := o0;
     l  := Flen;
 
-    while (i1 < l) and (o1 < BufSize) and not (FBuf[i1] in stopchars) do
+    while (i1 < l) and (o1 < BufSize) and not (FBuf[i1] in StopChars) do
     begin
       Inc(i1);
       Inc(o1);
@@ -1196,6 +1257,8 @@ begin
       // EOF Before string end
       FState := jnError;
       StackPush(jsError);
+      FLastError := jeUnexpectedEOF;
+      FLastErrorMessage := 'Unexpected end-of-file.';
       break;
     end;
 
@@ -1212,7 +1275,9 @@ begin
       if FLen = 0 then
       begin
         // EOF Before string end
-        FState := jnError;
+        FState := jnError;    
+        FLastError := jeUnexpectedEOF;
+        FLastErrorMessage := 'Unexpected end-of-file.';
         break;
       end;
 
@@ -1322,7 +1387,7 @@ begin
   Reduce;
 end;
 
-function TJsonReader.Number(out num: integer): Boolean;
+function TJsonReader.Number(out Num: integer): Boolean;
 begin
   if (FState <> jnNumber) then
   begin
@@ -1330,13 +1395,13 @@ begin
     exit;
   end;
 
-  Result := TryStrToInt(FNumber, num);
+  Result := TryStrToInt(FNumber, Num);
 
   if Result then
     FinalizeNumber;
 end;
 
-function TJsonReader.Number(out num: int64): Boolean;
+function TJsonReader.Number(out Num: int64): Boolean;
 begin
   if (FState <> jnNumber) then
   begin
@@ -1344,13 +1409,13 @@ begin
     exit;
   end;
 
-  Result := TryStrToInt64(FNumber, num);
+  Result := TryStrToInt64(FNumber, Num);
 
   if Result then
     FinalizeNumber;
 end;
 
-function TJsonReader.Number(out num: uint64): Boolean;
+function TJsonReader.Number(out Num: uint64): Boolean;
 begin
   if (FState <> jnNumber) then
   begin
@@ -1358,13 +1423,13 @@ begin
     exit;
   end;
 
-  Result := TryStrToUInt64(FNumber, num);
+  Result := TryStrToUInt64(FNumber, Num);
 
   if Result then
     FinalizeNumber;
 end;
 
-function TJsonReader.Number(out num: double): Boolean;
+function TJsonReader.Number(out Num: double): Boolean;
 var
   FormatSettings: TFormatSettings;
 begin
@@ -1377,13 +1442,13 @@ begin
     exit;
   end;
 
-  Result := TryStrToFloat(FNumber, num, FormatSettings);
+  Result := TryStrToFloat(FNumber, Num, FormatSettings);
 
   if Result then
     FinalizeNumber;
 end;
 
-function TJsonReader.Bool(out bool: Boolean): Boolean;
+function TJsonReader.Bool(out Bool: Boolean): Boolean;
 begin
   if FState <> jnBoolean then
   begin
@@ -1392,8 +1457,8 @@ begin
   end;
 
   case FToken of
-    jtTrue:  bool := true;
-    jtFalse: bool := false;
+    jtTrue:  Bool := true;
+    jtFalse: Bool := false;
     else     assert(false);
   end;
 
@@ -1428,7 +1493,7 @@ begin
     Result := False;
     Exit;
   end;
-  Result := True;
+  Result := true;
   FSkip  := false;
 end;
 
@@ -1439,7 +1504,7 @@ begin
     Result := False;
     Exit;
   end;
-  Result := True;
+  Result := true;
   FSkip  := false;
 end;
 
