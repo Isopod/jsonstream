@@ -7,7 +7,7 @@
       <Unit0>
         <Filename Value="jsontest.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="549"/>
+        <TopLine Value="754"/>
         <CursorPos Y="814"/>
         <UsageCount Value="3588"/>
         <Loaded Value="True"/>
@@ -17,14 +17,14 @@
         <IsPartOfProject Value="True"/>
         <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="1074"/>
-        <CursorPos X="20" Y="1103"/>
+        <TopLine Value="1473"/>
+        <CursorPos X="7" Y="753"/>
         <ExtraEditorCount Value="1"/>
         <ExtraEditor1>
           <IsVisibleTab Value="True"/>
           <WindowIndex Value="1"/>
-          <TopLine Value="1115"/>
-          <CursorPos X="10" Y="1153"/>
+          <TopLine Value="1089"/>
+          <CursorPos X="10" Y="1125"/>
         </ExtraEditor1>
         <UsageCount Value="3588"/>
         <Loaded Value="True"/>

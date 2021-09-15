@@ -30,10 +30,7 @@ type
     jsNumber,
     jsBoolean,
     jsNull,
-    jsString,
-    jsFauxString,
-    jsFauxNull,
-    jsFauxNumber
+    jsString
   );
 
   TJsonState = (
@@ -732,19 +729,18 @@ begin
     begin
       if High(FStack) <= FPopUntil then
         FPopUntil := -1;
+
       PoppedItem := StackPop;
+
       case PoppedItem of
         jsListItem, jsListHead, jsAfterListItem:
         begin
-          FState := jnListEnd;  
-          FSkip := false;
-          //Reduce;
+          FState := jnListEnd;
           break;
         end;
         jsDictItem, jsDictHead, jsAfterDictItem:
         begin
           FState := jnDictEnd;
-          FSkip := false;
           break;
         end;
         jsInitial, jsEOF:
@@ -754,9 +750,11 @@ begin
           break;
         end
       end;
+
     end;
 
-    Result := FState;     
+    Result := FState;
+    FSkip := false;
     Reduce;   
 
     // Note that the above loop only looks at FPopUntil and does not pay respect to FSkipUntil!
@@ -1036,30 +1034,6 @@ begin
       SkipString;
     jsDictKey:
       SkipKey;
-
-    // Tree for `{a : `:
-    //
-    //   jsList
-    //     jsListHead
-    //       jsListKey
-    //         jsFauxString
-    //
-    // Tree for `a`:
-    //
-    //   jsString
-    //     jsFauxString
-    //
-    // On error recovery, we push jsFauxString onto the stack in order to skip one Advance().
-    // Otherwise,  the next call to Advance() would skip the string before the user has the
-    // chance to read it.
-    jsFauxString:  
-      StackPop;
-
-    jsFauxNull, jsFauxNumber:
-    begin
-      StackPop;
-      Reduce;
-    end;
   end;
   Result := FState;
 end;
@@ -1121,10 +1095,8 @@ begin
       StackPush(jsString);
       FState := jnString;
     end;
-    // Always push on jsFauxString to avoid skipping on next Advance().
-    //StackPush(jsFauxString);
     FFauxString := true;
-    FSkip := false;//true;
+    FSkip := true;
     exit;
   end;
 
@@ -1167,9 +1139,7 @@ begin
   begin
     StackPop; // AfterDictKey
     StackPush(jsDictValue);
-    StackPush({jsFauxNull}jsNull);
-    //StackPop; // DictItem
-    //StackPush(jsAfterDictItem);
+    StackPush(jsNull);
     FState := jnNull;
     FSkip := true;
     exit;
@@ -1178,10 +1148,7 @@ begin
   // Dict: missing value after colon
   if StackTop = jsDictValue then
   begin
-    StackPush({jsFauxNull}jsNull);
-    //StackPop; // DictValue
-    //StackPop; // DictItem
-    //StackPush(jsAfterDictItem);
+    StackPush(jsNull);
     FState := jnNull;
     FSkip := true;
     exit;
@@ -1238,7 +1205,7 @@ begin
   if StackTop = jsNumber then
   begin
     FState := jnNumber;
-    FSkip := false;//true;
+    FSkip := true;
     exit;
   end;
 
