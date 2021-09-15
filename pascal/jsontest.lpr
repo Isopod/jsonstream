@@ -601,19 +601,15 @@ begin
     if not Reader.Dict then
       assert(false);
 
-    Reader.Skip;
-
-    for i := 0 to 1 do
-    begin       
-      Reader.Advance;
-
-      if Reader.State <> jnError then
-        assert(false);
-
-      Reader.Proceed;
-    end;
-
+    Reader.Skip;  
     Reader.Advance;
+
+    if Reader.State <> jnError then
+      assert(false);
+    if not Reader.Proceed then
+      assert(false);
+    if Reader.Proceed then
+      assert(false);
 
     if not Reader.Number(num) then
       assert(false);

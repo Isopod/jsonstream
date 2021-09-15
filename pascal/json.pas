@@ -100,8 +100,6 @@ type
     FPopUntil:   integer;
     // Stack depth up until which a skip was issued.
     FSkipUntil:  integer;
-    // Whether we encountered an error while skipping.
-    FSkipError:  Boolean;
     // Whether current item should be skipped upon next call to Advance.
     FSkip:       Boolean;
 
@@ -138,6 +136,7 @@ type
 
     // Internal functions
     function  InternalAdvance: TJsonState;
+    procedure InternalProceed;
     procedure InvalidOrUnexpectedToken(const Msg: string);
   public
     constructor Create(Stream: TStream);
@@ -239,7 +238,7 @@ type
 
     // Proceed after a parse error. If this is not called after an error is
     // encountered, no further tokens in the file will be processed.
-    procedure Proceed;
+    function Proceed: Boolean;
 
     // Return last error code. A return value of 0 means that there was no
     // error. A return value other than 0 indicates that there was an error.
@@ -441,7 +440,7 @@ begin
     begin
       FNumberErr := true;  
       FLastError := jeInvalidNumber;
-      FLastErrorMessage := 'Invalid number: JSON does not allow leading `+`.';
+      FLastErrorMessage := 'Number has leading `+`.';
     end;
 
     Buf[n] := FBuf[FPos];
@@ -460,7 +459,7 @@ begin
   begin
     FNumberErr := true;   
     FLastError := jeInvalidNumber;
-    FLastErrorMessage := 'Invalid number: JSON does not allow leading zeroes.';
+    FLastErrorMessage := 'Number has leading zeroes.';
   end;
 
   if (LeadingZeroes > 0) and not ((FLen >= 0) and (FBuf[FPos] in ['0'..'9'])) then
@@ -475,7 +474,7 @@ begin
       begin
         FNumberErr := true;  
         FLastError := jeInvalidNumber;
-        FLastErrorMessage := 'Invalid number: Expected digit after decimal point.';
+        FLastErrorMessage := 'Expected digit after decimal point.';
       end;
       Exponent := -SkipZero;
       Exponent := Exponent - ReadDigits;
@@ -501,7 +500,7 @@ begin
       begin
         FNumberErr := true; 
         FLastError := jeInvalidNumber;
-        FLastErrorMessage := 'Invalid number: Expected digit after decimal point.';
+        FLastErrorMessage := 'Expected digit after decimal point.';
       end;
       Exponent := -ReadDigits;
     end;
@@ -666,6 +665,7 @@ end;
 function TJsonReader.Advance: TJsonState;
 var
   NewSkip: integer;
+  BeenSkipping: Boolean;
 begin
   if StackTop in [jsListHead, jsDictHead] then
     NewSkip := High(FStack) - 1
@@ -679,16 +679,23 @@ begin
   begin
     case InternalAdvance of
       jnError:
-      begin
-        FSkipError := True;
         break;
-      end;
     end;  
     if High(FStack) <= FSkipUntil then
     begin
-      if (FSkipUntil < MaxInt) and (StackTop in [jsAfterListItem, jsAfterDictItem]) then
-        InternalAdvance;
+      BeenSkipping := FSkipUntil < MaxInt;  
       FSkipUntil := MaxInt;
+
+      // When skiping from inside a structure like this:
+      //
+      // [
+      //   *Skip*
+      //
+      // After skipping, we still get the closing ]. But the user who called Skip() is not interested in i
+      // this token, so we have to eat it.
+      if BeenSkipping and (StackTop in [jsAfterListItem, jsAfterDictItem]) then
+        InternalAdvance;
+
       break;
     end;
   end;
@@ -705,10 +712,12 @@ end;
 function TJsonReader.InternalAdvance: TJsonState;
 label
   start;
+var
+  PoppedItem: TJsonInternalState;
 begin
   start:
 
-  if (StackTop = jsError) and not FSkipError then
+  if StackTop = jsError then
     FPopUntil := 0;
 
   if FPopUntil < 0 then
@@ -723,30 +732,40 @@ begin
     begin
       if High(FStack) <= FPopUntil then
         FPopUntil := -1;
-      case StackPop of
+      PoppedItem := StackPop;
+      case PoppedItem of
         jsListItem, jsListHead, jsAfterListItem:
         begin
           FState := jnListEnd;  
           FSkip := false;
-          Reduce;
+          //Reduce;
           break;
         end;
         jsDictItem, jsDictHead, jsAfterDictItem:
         begin
           FState := jnDictEnd;
           FSkip := false;
-          Reduce;
           break;
         end;
-        jsInitial:
+        jsInitial, jsEOF:
         begin
           FState := jnEOF;
-          StackPush(jsInitial);
+          StackPush(jsEOF);
           break;
         end
       end;
     end;
-    Result := FState;
+
+    Result := FState;     
+    Reduce;   
+
+    // Note that the above loop only looks at FPopUntil and does not pay respect to FSkipUntil!
+    // Therefore it can pop one more element than we actually want to pop. If this case happens,
+    // push the item back on. (Unfortunately it is not trivial to integrate the check into the
+    // loop condition itself, as we may only know whether we went to far after we called Reduce()).
+    if (FSkipUntil < MaxInt) and (High(FStack) < FSkipUntil) then
+      StackPush(PoppedItem);
+
     exit;
   end;
 
@@ -849,7 +868,7 @@ begin
           begin
             FState := jnError;
             FLastError := jeUnexpectedListEnd;
-            FLastErrorMessage := 'Unexpected end of list (`]`). Note: JSON does not allow trailing comma.';
+            FLastErrorMessage := 'Trailing comma before end of list.';
             StackPush(jsError);
           end;
         end
@@ -905,7 +924,7 @@ begin
           begin
             FState := jnError;
             FLastError := jeUnexpectedDictEnd;    
-            FLastErrorMessage := 'Unexpected end of dict (`}`). Note: JSON does not allow trailing comma.';
+            FLastErrorMessage := 'Trailing comma before end of dict.';
             StackPush(jsError);
           end;
         end
@@ -1018,9 +1037,6 @@ begin
     jsDictKey:
       SkipKey;
 
-    jsError:
-      FSkipError := false;
-
     // Tree for `{a : `:
     //
     //   jsList
@@ -1054,17 +1070,22 @@ begin
     jtUnknown:
     begin
       FLastError := jeInvalidToken;
-      FLastErrorMessage := Format('Unexpected character (`%s`). %s', [FBuf[FPos], Msg]);
+      FLastErrorMessage := Format('Unexpected character `%s`. %s', [FBuf[FPos], Msg]);
     end;
     jtEOF:
     begin
       FLastError := jeUnexpectedEOF;
       FLastErrorMessage := Format('Unexpected end-of-file. %s', [Msg]);
+    end;
+    jtNumber:
+    begin    
+      FLastError := jeUnexpectedToken;
+      FLastErrorMessage := Format('Unexpected numeric token. %s', [Msg]);
     end
     else
     begin
       FLastError := jeUnexpectedToken;
-      FLastErrorMessage := Format('Unexpected character (`%s`). %s', [FBuf[FPos], Msg]);
+      FLastErrorMessage := Format('Unexpected `%s`. %s', [FBuf[FPos], Msg]);
     end;
   end;
 end;
@@ -1074,15 +1095,14 @@ begin
   FSkip := true;
 end;
 
-procedure TJsonReader.Proceed;
+
+procedure TJsonReader.InternalProceed;
 var
   i: integer;
   Needle: set of TJsonInternalState;
 begin
   if FState <> jnError then
     exit;
-
-  FSkipError := false;
 
   // Pop off the jsError state
   StackPop;
@@ -1102,7 +1122,7 @@ begin
       FState := jnString;
     end;
     // Always push on jsFauxString to avoid skipping on next Advance().
-    StackPush(jsFauxString);
+    //StackPush(jsFauxString);
     FFauxString := true;
     FSkip := false;//true;
     exit;
@@ -1117,6 +1137,14 @@ begin
     exit;
   end;
 
+  // List: trailing comma
+  if (StackTop = jsListItem) and  (FToken = jtListEnd) then
+  begin
+    StackPop;
+    StackPush(jsAfterListItem);
+    exit;
+  end;
+
   // Dict: missing comma
   if (StackTop = jsAfterDictItem) and
      (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtString]) then
@@ -1126,12 +1154,22 @@ begin
     exit;
   end;
 
+  // Dict: trailing comma
+  if (StackTop = jsDictItem) and  (FToken = jtDictEnd) then
+  begin
+    StackPop;
+    StackPush(jsAfterDictItem);
+    exit;
+  end;
+
   // Dict: missing colon
   if StackTop = jsAfterDictKey then
   begin
     StackPop; // AfterDictKey
     StackPush(jsDictValue);
-    StackPush(jsFauxNull);
+    StackPush({jsFauxNull}jsNull);
+    //StackPop; // DictItem
+    //StackPush(jsAfterDictItem);
     FState := jnNull;
     FSkip := true;
     exit;
@@ -1140,7 +1178,10 @@ begin
   // Dict: missing value after colon
   if StackTop = jsDictValue then
   begin
-    StackPush(jsFauxNull);
+    StackPush({jsFauxNull}jsNull);
+    //StackPop; // DictValue
+    //StackPop; // DictItem
+    //StackPush(jsAfterDictItem);
     FState := jnNull;
     FSkip := true;
     exit;
@@ -1157,8 +1198,8 @@ begin
   // List closed, but node is not a list or
   // Dict closed, but node is not a dict
   // (this rule also catches trailing comma)
-  if ((FToken = jtListEnd) and not (StackTop in [jsListHead, jsAfterListItem])) or
-     ((FToken = jtDictEnd) and not (StackTop in [jsDictHead, jsAfterDictItem])) then
+  if ((FToken = jtListEnd) and not (StackTop in [jsListHead, jsListItem])) or
+     ((FToken = jtDictEnd) and not (StackTop in [jsDictHead, jsDictItem])) then
   begin
     case FToken of
       jtListEnd: Needle := [jsListItem, jsListHead];
@@ -1195,18 +1236,27 @@ begin
   end;
 
   if StackTop = jsNumber then
-  begin               
-    StackPush(jsFauxNumber);
+  begin
     FState := jnNumber;
     FSkip := false;//true;
     exit;
   end;
 
-  // If we could not fix the error, push the error state back on
-  StackPush(jsError);
-  // And pop the entire stack
+  // We could not fix the error. Pop the entire stack
   FPopUntil := 0;
   FSkip := false;
+end;
+
+function TJsonReader.Proceed: Boolean;
+begin
+  InternalProceed;
+  if (High(FStack) >= FSkipUntil) then
+    Advance;
+
+  // If InternalProceed makes progress, the jsError state is always removed from the stack.
+  // Therefore, if there is a jsError state on the stack, then it is a new error encountered during Advance().
+  // This error needs to be handled by the caller.
+  Result := StackTop = jsError;
 end;
 
 function TJsonReader.LastError: TJsonError;
