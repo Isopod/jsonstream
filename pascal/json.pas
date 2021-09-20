@@ -53,10 +53,13 @@ type
     jeUnexpectedToken,
     jeUnexpectedListEnd,
     jeUnexpectedDictEnd,
-    jeUnexpectedEOF
+    jeUnexpectedEOF,
+    jeInvalidEscapeSequence
   );
 
   PJsonState = ^TJsonState;
+
+  TJsonString = string;
 
   { TJsonReader }
 
@@ -78,7 +81,7 @@ type
     // pass it to the runtime and assume it handles it correctly.
     //
     // https://www.exploringbinary.com/17-digits-gets-you-there-once-youve-found-your-way/
-    FNumber:     string;
+    FNumber:     TJsonString;
     FNumberErr:  Boolean;
 
     FStream:     TStream;
@@ -88,9 +91,12 @@ type
     // False for a regular string, true after error recovery when we encounter garbage tokens and
     // fallback to interpreting them as a string.
     FFauxString: boolean;
+    // If an error occurred during Str() or Key(), the part that has been read is temporarily
+    // stored here between successive calls.
+    FSavedStr:   TJsonString;
+    FStrIgnoreError: boolean;
 
     FStack:      array of TJsonInternalState;
-    FSavedStack: array of TJsonInternalState;
     FState:      TJsonState;
 
     // Stack depth up until which we must pop after an error.
@@ -101,7 +107,7 @@ type
     FSkip:       Boolean;
 
     FLastError:  TJsonError;
-    FLastErrorMessage: string;
+    FLastErrorMessage: TJsonString;
 
     // Tokenizer
     procedure GetToken;
@@ -113,9 +119,9 @@ type
     procedure Reduce;
 
     // Parsing helpers
-    procedure RefillBuffer;
+    procedure RefillBuffer(LookAhead: integer = 0);
     procedure SkipSpace;
-    function  MatchString(const Str: string): Boolean;
+    function  MatchString(const Str: TJsonString): Boolean;
     procedure ParseNumber;
     //function  InitNumber: Boolean;
     procedure FinalizeNumber;
@@ -129,12 +135,12 @@ type
 
     // Key/Str helpers
     function  StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
-    function  StrInternal(out S: String): Boolean;
+    function  StrInternal(out S: TJsonString): Boolean;
 
     // Internal functions
     function  InternalAdvance: TJsonState;
-    procedure InternalProceed;
-    procedure InvalidOrUnexpectedToken(const Msg: string);
+    function  InternalProceed: Boolean;
+    procedure InvalidOrUnexpectedToken(const Msg: TJsonString);
   public
     constructor Create(Stream: TStream);
 
@@ -156,13 +162,17 @@ type
     // children will be skipped.
     procedure Skip;
 
-
     // === Acceptor functions for specific elements ===
 
     // Returns true iff the current element is a dict entry and stores its key
-    // in K. If true is returned, then the current element is automatically
-    // advanced to the value of the entry.
-    function  Key(out K: String): Boolean;
+    // in K. If true is returned, then the key is stored in K and the reader
+    // is automatically advanced to the corresponding value.
+    // If false is returned, the current element is either not a key or an error
+    // ocurred during decoding (such as an invalid escape sequence or premature
+    // end of file). In that case the contents of K are undefined.
+    // If an error occured, you may call Proceed() to ignore it and call Key()
+    // again.
+    function  Key(out K: TJsonString): Boolean;
 
     // This function is like Key, except that it does not return the full key,
     // but only reads part of it. This is intended for situations where the key
@@ -172,16 +182,22 @@ type
     // Return value:
     //   > 0: The number of bytes actually read.
     //   = 0: Indicates the end of the key.
-    //   < 0: An error occurred (invalid escape sequence or missing trailing ").
+    //   < 0: An error occurred (invalid escape sequence or missing trailing ")
+    //        or the value is not a key.
     // If an error occurred, you can call Proceed() to ignore it and try to
     // continue reading.
     function  KeyBuf(out Buf; BufSize: SizeInt): SizeInt;
 
-    // Returns true iff the current element is a string value. If true is
-    // is returned, then the decoded string value is stored in S.
-    function  Str(out S: String): Boolean;
+    // Returns true iff the current element is a valid string value.
+    // If true is returned, then the decoded string value is stored in S.
+    // If false is returned, the current element is either not a string or an
+    // error occurred during decoding (such as an invalid escape sequence or
+    // premature end of file). In that case the contents of S are undefined.
+    // If an error occurred, you may call Proceed() to ignore it and call Str()
+    // again.
+    function  Str(out S: TJsonString): Boolean;
 
-    // This function is like St, except that it does not return the full string,
+    // This function is like Str, except that it does not return the full string,
     // but only reads part of it. This is intended for situations where the
     // string could be very large ind it would not be efficient to allocate it
     // in memory in its entirety. The semantics are the same as the read()
@@ -189,7 +205,8 @@ type
     // Return value:
     //   > 0: The number of bytes actually read.
     //   = 0: Indicates the end of the string.
-    //   < 0: An error occurred (invalid escape sequence or missing trailing ").
+    //   < 0: An error occurred (invalid escape sequence or missing trailing ")
+    //        or the value is not a string.
     // If an error occurred, you can call Proceed() to ignore it and try to
     // continue reading.
     function  StrBuf(out Buf; BufSize: SizeInt): SizeInt;
@@ -235,37 +252,48 @@ type
 
     // Proceed after a parse error. If this is not called after an error is
     // encountered, no further tokens in the file will be processed.
-    function Proceed: Boolean;
+    function  Proceed: Boolean;
 
     // Return last error code. A return value of 0 means that there was no
     // error. A return value other than 0 indicates that there was an error.
-    function LastError: TJsonError;
+    function  LastError: TJsonError;
 
     // Return error message for last error.
-    function  LastErrorMessage: string;
+    function  LastErrorMessage: TJsonString;
   end;
 
   { TJsonWriter }
-  {
+
   TJsonWriter = class
   protected
     FStream: TStream;
+    FNeedComma: Boolean;
+    FNeedColon: Boolean;
+    FStructEmpty: Boolean;
+    FWritingstring: Boolean;
+    FLevel: integer;
+    procedure WriteSeparator(Indent: Boolean = true);
+    procedure Write(const S: TJsonString);
+    procedure WriteBuf(const Buf; BufSize: SizeInt);
+    procedure StrBufInternal(const Buf; BufSize: SizeInt; IsKey: Boolean);
   public
     constructor Create(Stream: TStream);
 
-    procedure BeginDict;
-    procedure EndDict;
-    procedure BeginList;
-    procedure EndList;
-
-    procedure IntVal(val: integer);
-    procedure StringVal(const val: String);
-    procedure WriteVal(const Buf; n: SizeInt);
-
-    procedure Key(Key: String);
-    procedure WriteKey(const Buf; n: SizeInt);
+    procedure Key(const K: TJsonString);
+    procedure KeyBuf(const Buf; BufSize: SizeInt);
+    procedure Str(const S: TJsonString);
+    procedure StrBuf(const Buf; BufSize: SizeInt);
+    procedure Number(Num: integer); overload;
+    procedure Number(Num: int64); overload;
+    procedure Number(Num: uint64); overload;
+    procedure Number(Num: double); overload;
+    procedure Bool(Bool: Boolean);
+    procedure Null;
+    procedure Dict;
+    procedure DictEnd;
+    procedure List;
+    procedure ListEnd;
   end;
-  }
 
 implementation
 
@@ -279,15 +307,18 @@ begin
   FPopUntil  := -1;
   FSkipUntil := MaxInt;
   FSkip      := false;
+  FSavedStr  := '';
   StackPush(jsInitial);
   Advance;
 end;
 
-procedure TJsonReader.RefillBuffer;
+procedure TJsonReader.RefillBuffer(LookAhead: integer);
 begin
-  if FPos >= FLen then
+  if FPos + LookAhead >= FLen then
   begin
-    FLen := FStream.Read(FBuf, length(FBuf));
+    assert(FPos <= FLen);
+    Move(FBuf[FPos], FBuf[0], FLen - FPos);
+    FLen := FStream.Read(FBuf[FLen - FPos], length(FBuf) - (FLen - FPos)) + (FLen - FPos);
     FPos := 0;
   end;
 
@@ -300,8 +331,11 @@ begin
     while (FPos < FLen) and (FBuf[FPos] in [' ', #9, #13, #10]) do
       Inc(FPos);
 
+    if FPos < FLen then
+      break;
+
     RefillBuffer;
-  until (FPos < FLen) or (FLen <= 0);
+  until FLen <= 0;
 end;
 
 procedure TJsonReader.SkipNumber;
@@ -329,7 +363,7 @@ end;
 
 procedure TJsonReader.SkipString;
 var
-  dummy: string;
+  dummy: TJsonString;
 begin
   // TODO: Be more efficient. We don't actually care about the string so we
   // should not allocate it.
@@ -338,14 +372,14 @@ end;
 
 procedure TJsonReader.SkipKey;
 var
-  dummy: string;
+  dummy: TJsonString;
 begin    
   // TODO: Be more efficient. We don't actually care about the string so we
   // should not allocate it.
   Key(dummy);
 end;
 
-function TJsonReader.MatchString(const Str: string): Boolean;
+function TJsonReader.MatchString(const Str: TJsonString): Boolean;
 var
   n: SizeInt;
   i: integer;
@@ -1038,7 +1072,7 @@ begin
   Result := FState;
 end;
 
-procedure TJsonReader.InvalidOrUnexpectedToken(const Msg: string);
+procedure TJsonReader.InvalidOrUnexpectedToken(const Msg: TJsonString);
 begin
   case FToken of
     jtUnknown:
@@ -1070,12 +1104,14 @@ begin
 end;
 
 
-procedure TJsonReader.InternalProceed;
+function TJsonReader.InternalProceed: Boolean;
 var
   i: integer;
   Needle: set of TJsonInternalState;
 begin
-  if FState <> jnError then
+  Result := false;
+
+  if StackTop <> jsError then
     exit;
 
   // Pop off the jsError state
@@ -1097,6 +1133,7 @@ begin
     end;
     FFauxString := true;
     FSkip := true;
+    Result := true;
     exit;
   end;
 
@@ -1141,7 +1178,8 @@ begin
     StackPush(jsDictValue);
     StackPush(jsNull);
     FState := jnNull;
-    FSkip := true;
+    FSkip := true;        
+    Result := true;
     exit;
   end;
 
@@ -1150,7 +1188,8 @@ begin
   begin
     StackPush(jsNull);
     FState := jnNull;
-    FSkip := true;
+    FSkip := true;   
+    Result := true;
     exit;
   end;
 
@@ -1205,25 +1244,34 @@ begin
   if StackTop = jsNumber then
   begin
     FState := jnNumber;
+    FSkip := true;     
+    Result := true;
+    exit;
+  end;
+
+  if StackTop = jsString then
+  begin
+    FStrIgnoreError := true;
     FSkip := true;
+    FState := jnString;     
+    Result := true;
     exit;
   end;
 
   // We could not fix the error. Pop the entire stack
   FPopUntil := 0;
   FSkip := false;
+
+  // Push error state back on
+  StackPush(jsError);
 end;
 
 function TJsonReader.Proceed: Boolean;
 begin
-  InternalProceed;
+  Result := InternalProceed;
+
   if (High(FStack) >= FSkipUntil) then
     Advance;
-
-  // If InternalProceed makes progress, the jsError state is always removed from the stack.
-  // Therefore, if there is a jsError state on the stack, then it is a new error encountered during Advance().
-  // This error needs to be handled by the caller.
-  Result := StackTop = jsError;
 end;
 
 function TJsonReader.LastError: TJsonError;
@@ -1231,7 +1279,7 @@ begin
   Result := FLastError;
 end;
 
-function TJsonReader.LastErrorMessage: string;
+function TJsonReader.LastErrorMessage: TJsonString;
 begin
   Result := FLastErrorMessage;
 end;
@@ -1241,20 +1289,43 @@ var
   i0, i1, o0, o1: SizeInt;
   l: SizeInt;
   StopChars: set of char;
+  c: Char;
+  esc: TJsonString;
+  uc: Cardinal;
+  k: integer;
+
+  function HexDigit(c: Char): integer;
+  begin
+    case c of
+      '0'..'9': Result := Ord(c) - Ord('0');
+      'a'..'f': Result := Ord(c) - Ord('a') + $a;
+      'A'..'Q': Result := Ord(c) - Ord('A') + $a;
+      else      Result := -1;
+    end;
+  end;
+
 begin
-  o0 := 0;
+  o1 := 0;
 
   if FFauxString then
-    StopChars := [#0..#32, '\', ':', ',', '{', '}', '[', ']']
+    StopChars := [#0..#32, {'\',} ':', ',', '{', '}', '[', ']']
   else
     StopChars := ['\', '"'];
+
+  FillByte(Buf, BufSize, 0);
+
+  if StackTop = jsError then
+  begin
+    Result := -1;
+    exit;
+  end;
 
   while true do
   begin
     i0 := FPos;
     i1 := i0;
-    o1 := o0;
-    l  := Flen;
+    o0 := o1;
+    l  := FLen;
 
     while (i1 < l) and (o1 < BufSize) and not (FBuf[i1] in StopChars) do
     begin
@@ -1264,7 +1335,7 @@ begin
 
     FPos := i1;
 
-    Move(FBuf[i0], PChar(SizeInt(@Buf) + o0)^, o1 - o0);
+    Move(FBuf[i0], PChar(SizeUInt(@Buf) + o0)^, o1 - o0);
 
     if o1 >= BufSize then
       break;
@@ -1272,10 +1343,13 @@ begin
     if FLen = 0 then
     begin
       // EOF Before string end
-      FState := jnError;
-      StackPush(jsError);
-      FLastError := jeUnexpectedEOF;
-      FLastErrorMessage := 'Unexpected end-of-file.';
+      if not FStrIgnoreError then
+      begin
+        FState := jnError;
+        StackPush(jsError);
+        FLastError := jeUnexpectedEOF;
+        FLastErrorMessage := 'Unexpected end-of-file.';
+      end;
       break;
     end;
 
@@ -1287,22 +1361,82 @@ begin
 
     if FBuf[FPos] = '\' then
     begin
-      Inc(FPos);
-      RefillBuffer;
-      if FLen = 0 then
+      // Maximum length escape sequence = \u1234 = need 6 characters lookahead
+      RefillBuffer(6);
+
+      if FPos + 1 >= FLen then
       begin
         // EOF Before string end
-        FState := jnError;    
-        FLastError := jeUnexpectedEOF;
-        FLastErrorMessage := 'Unexpected end-of-file.';
+        if not FStrIgnoreError then
+        begin
+          FState := jnError;
+          FLastError := jeUnexpectedEOF;
+          FLastErrorMessage := 'Unexpected end-of-file.';
+        end;
         break;
       end;
 
-      // TODO: Handle \xAB escape codes
+      if FBuf[FPos + 1] = 'u' then
+      begin
+        uc := 0;
+        k := 0;
 
-      PChar(SizeInt(@Buf) + o1)^ := FBuf[FPos];
-      Inc(FPos);
-      inc(o1);
+        while (k < 4) and (FPos + 2 + k < FLen) and (HexDigit(FBuf[FPos + 2 + k]) >= 0) do
+        begin
+          uc := uc shl 4 or HexDigit(FBuf[FPos + 2 + k]);
+          inc(k);
+        end;
+
+        if (k < 4) and not FStrIgnoreError then
+        begin
+          FState := jnError; 
+          StackPush(jsError);
+          FLastError := jeInvalidEscapeSequence;
+          FLastErrorMessage := 'Invalid escape sequence in string. Expected four hex digits.';
+          break;
+        end;
+
+        if k = 0 then
+          uc := $fffe;
+
+        esc := TJsonString(UnicodeChar(uc));
+
+        if o1 + Length(esc) > BufSize then
+          break;
+
+        Move(esc[1], PChar(SizeUInt(@Buf) + o1)^, Length(esc));
+
+        Inc(o1, Length(esc));
+        Inc(FPos, 2 + k);
+      end
+      else
+      begin
+        case FBuf[FPos + 1] of
+          '"': c := '"';
+          '\': c := '\';
+          '/': c := '/';
+          'b': c := #08;
+          'f': c := #12;
+          'n': c := #10;
+          'r': c := #13;
+          't': c := #09;
+          else
+          begin
+            if not FStrIgnoreError then
+            begin
+              FState := jnError;
+              FLastError := jeInvalidEscapeSequence;
+              FLastErrorMessage := 'Invalid escape sequence in string.';
+              break;
+            end
+            else
+              c := FBuf[FPos + 1];
+          end;
+        end;
+        Inc(FPos, 2);
+        PChar(SizeUInt(@Buf) + o1)^ := c;
+        inc(o1);
+      end;
     end
     else
     begin
@@ -1313,26 +1447,32 @@ begin
 
   Result := o1;
 
+  FStrIgnoreError := false;
+
   if (Result = 0) and (StackTop <> jsError) then
   begin
     if not FFauxString then
       Inc(FPos);
     Reduce;
   end;
+
+  if (Result = 0) and (StackTop = jsError) then
+    Result := -1;
 end;
 
-function TJsonReader.StrInternal(out S: String): Boolean;
+function TJsonReader.StrInternal(out S: TJsonString): Boolean;
 var
   Len:   SizeInt;
   Delta: SizeInt;
 begin
-  SetLength(S, 32);
-  Len := 0;
+  S := FSavedStr;             
+  Len := Length(S);
+  SetLength(S, Len + 32);
   while true do
   begin
     if Len = Length(S) then
       SetLength(S, Length(S) * 2);
-    Delta := StrBufInternal(S[1], Length(S) - Len);
+    Delta := StrBufInternal(S[1 + Len], Length(S) - Len);
     if Delta <= 0 then
     begin
       Result := Delta = 0;
@@ -1341,9 +1481,19 @@ begin
     Len := Len + Delta;
   end;
   SetLength(S, Len);
+  if Delta < 0 then
+  begin
+    // There was an error, save temporary result
+    FSavedStr := S;
+    S := '';
+  end
+  else
+  begin
+    FSavedStr := '';
+  end;
 end;
 
-function TJsonReader.Key(out K: String): Boolean;
+function TJsonReader.Key(out K: TJsonString): Boolean;
 begin
   if FState <> jnKey then
   begin
@@ -1372,11 +1522,12 @@ begin
     InternalAdvance;
 end;
 
-function TJsonReader.Str(out S: String): Boolean;
+function TJsonReader.Str(out S: TJsonString): Boolean;
 begin
   if FState <> jnString then
   begin
     Result := False;
+    S := '';
     Exit;
   end;
 
@@ -1528,6 +1679,222 @@ end;
 function TJsonReader.Error: Boolean;
 begin
   Result := FState = jnError;
+end;
+
+{ TJsonWriter }
+
+constructor TJsonWriter.Create(Stream: TStream);
+begin
+  FNeedComma := false;
+  FNeedColon := false;
+  FWritingstring := false;
+  FStream := Stream;
+end;
+
+procedure TJsonWriter.WriteSeparator(Indent: Boolean);
+var
+  i: integer;
+begin
+  if FNeedColon then
+    Write(': ');
+  if FNeedComma then
+    Write(',');
+  if Indent and (FNeedComma or FStructEmpty) then
+    Write(LineEnding);
+  if Indent and not FNeedColon then
+  begin
+    for i := 0 to FLevel - 1 do
+      Write('  ');
+  end;
+  FNeedColon := false;
+  FStructEmpty := false;
+end;
+
+procedure TJsonWriter.Write(const S: TJsonString);
+begin
+  FStream.Write(S[1], length(S));
+end;
+
+procedure TJsonWriter.WriteBuf(const Buf; BufSize: SizeInt);
+begin
+  FStream.Write(Buf, BufSize);
+end;
+
+
+procedure TJsonWriter.StrBufInternal(const Buf; BufSize: SizeInt; IsKey: Boolean
+  );
+const
+  ChunkSize = 256;
+  EntitySize = 2; // \" or \\
+var
+  Escaped: array[0 .. EntitySize * ChunkSize - 1] of Char;
+  i, j, o, n: SizeInt;
+  c: PChar;
+begin
+  if not FWritingstring then
+  begin
+    WriteSeparator;
+    Write('"');
+    FWritingstring := true;
+  end else if BufSize = 0 then
+  begin
+    Write('"');
+    FWritingstring := false;
+    if IsKey then
+    begin
+      FNeedComma := false;
+      FNeedColon := true
+    end
+    else
+    begin
+      FNeedComma := true;
+      FNeedColon := false;
+    end;
+  end;
+
+  i := 0;
+  c := PChar(@Buf);
+
+  while i < BufSize do
+  begin
+    n := BufSize - i;
+    if n > ChunkSize then
+      n := ChunkSize;
+
+    o := 0;
+    for j := 0 to n - 1 do
+    begin
+      if c^ in ['\', '"'] then
+      begin
+        Escaped[o] := '\';
+        Inc(o);
+      end;
+      Escaped[o] := c^;
+      Inc(o);
+      Inc(i);
+      Inc(c);
+    end;
+
+    WriteBuf(Escaped, SizeOf(Char) * o);
+  end;
+end;
+
+procedure TJsonWriter.Key(const K: TJsonString);
+begin
+  StrBufInternal(K[1], SizeOf(Char) * Length(K), true);
+  StrBufInternal(PChar(nil)^, 0, true);
+end;
+
+procedure TJsonWriter.KeyBuf(const Buf; BufSize: SizeInt);
+begin
+  StrBufInternal(Buf, BufSize, true);
+end;
+
+procedure TJsonWriter.Str(const S: TJsonString);
+begin
+  StrBufInternal(S[1], SizeOf(Char) * Length(S), false);
+  StrBufInternal(PChar(nil)^, 0, false);
+end;
+
+procedure TJsonWriter.StrBuf(const Buf; BufSize: SizeInt);
+begin
+  StrBufInternal(Buf, BufSize, false);
+end;
+
+procedure TJsonWriter.Number(Num: integer);
+begin
+  WriteSeparator;
+  Write(IntToStr(Num));
+  FNeedComma := true;
+end;
+
+procedure TJsonWriter.Number(Num: int64);
+begin
+  WriteSeparator;
+  Write(IntToStr(Num));
+  FNeedComma := true;
+end;
+
+procedure TJsonWriter.Number(Num: uint64);
+begin
+  WriteSeparator;
+  Write(UIntToStr(Num));
+  FNeedComma := true;
+end;
+
+procedure TJsonWriter.Number(Num: double);
+var
+  fs: TFormatSettings;
+begin
+  fs.ThousandSeparator := #0;
+  fs.DecimalSeparator := '.';
+  // TODO: Check if Num is a valid JSON number (i.e. not NaN or Inf)
+  WriteSeparator;
+  Write(FloatToStr(Num, fs));
+  FNeedComma := true;
+end;
+
+procedure TJsonWriter.Bool(Bool: Boolean);
+begin
+  WriteSeparator;
+  if Bool then
+    Write('true')
+  else
+    Write('false');
+  FNeedComma := true;
+end;
+
+procedure TJsonWriter.Null;
+begin    
+  WriteSeparator;
+  Write('null');
+  FNeedComma := true;
+end;
+
+procedure TJsonWriter.Dict;
+begin
+  WriteSeparator;
+  Write('{');
+  FNeedComma := false;    
+  FStructEmpty := true;   
+  Inc(FLevel);
+end;
+
+procedure TJsonWriter.DictEnd;
+begin
+  FNeedComma := false;
+  Dec(FLevel);
+  if not FStructEmpty then
+  begin
+    Write(LineEnding);
+    WriteSeparator;
+  end;
+  Write('}');
+  FNeedComma := true;   
+  FStructEmpty := false;
+end;
+
+procedure TJsonWriter.List;
+begin
+  WriteSeparator;
+  Write('[');
+  FNeedComma := false;
+  FStructEmpty := true;    
+  Inc(FLevel);
+end;
+
+procedure TJsonWriter.ListEnd;
+begin             
+  FNeedComma := false;
+  Dec(FLevel);
+  if not FStructEmpty then
+  begin
+    Write(LineEnding);
+    WriteSeparator;
+  end;
+  Write(']');
+  FNeedComma := true;  
+  FStructEmpty := false;
 end;
 
 end.

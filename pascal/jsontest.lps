@@ -7,18 +7,18 @@
       <Unit0>
         <Filename Value="jsontest.lpr"/>
         <IsPartOfProject Value="True"/>
-        <TopLine Value="754"/>
-        <CursorPos Y="814"/>
+        <IsVisibleTab Value="True"/>
+        <TopLine Value="751"/>
+        <CursorPos X="47" Y="770"/>
         <UsageCount Value="3588"/>
         <Loaded Value="True"/>
       </Unit0>
       <Unit1>
         <Filename Value="json.pas"/>
         <IsPartOfProject Value="True"/>
-        <IsVisibleTab Value="True"/>
         <EditorIndex Value="1"/>
-        <TopLine Value="1473"/>
-        <CursorPos X="7" Y="753"/>
+        <TopLine Value="346"/>
+        <CursorPos X="36" Y="352"/>
         <ExtraEditorCount Value="1"/>
         <ExtraEditor1>
           <IsVisibleTab Value="True"/>
@@ -52,124 +52,124 @@
     </Units>
     <JumpHistory Count="30" HistoryIndex="29">
       <Position1>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="453" TopLine="435"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1114" TopLine="1084"/>
       </Position1>
       <Position2>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="455" TopLine="435"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1118" TopLine="1084"/>
       </Position2>
       <Position3>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="458" TopLine="435"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1121" TopLine="1084"/>
       </Position3>
       <Position4>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="453" TopLine="435"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1122" TopLine="1084"/>
       </Position4>
       <Position5>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="814" TopLine="760"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1141" TopLine="1114"/>
       </Position5>
       <Position6>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="776" Column="39" TopLine="761"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1150" TopLine="1114"/>
       </Position6>
       <Position7>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="816" TopLine="761"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1158" TopLine="1114"/>
       </Position7>
       <Position8>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="583" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1167" TopLine="1120"/>
       </Position8>
       <Position9>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="584" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1175" TopLine="1148"/>
       </Position9>
       <Position10>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="585" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1177" TopLine="1148"/>
       </Position10>
       <Position11>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="586" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1178" TopLine="1148"/>
       </Position11>
       <Position12>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="587" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1179" TopLine="1148"/>
       </Position12>
       <Position13>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="589" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1180" TopLine="1148"/>
       </Position13>
       <Position14>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="592" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1181" TopLine="1148"/>
       </Position14>
       <Position15>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="594" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1182" TopLine="1148"/>
       </Position15>
       <Position16>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="597" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1183" TopLine="1148"/>
       </Position16>
       <Position17>
-        <Filename Value="jsontest.lpr"/>
-        <Caret Line="599" TopLine="553"/>
+        <Filename Value="json.pas"/>
+        <Caret Line="1267" TopLine="1240"/>
       </Position17>
       <Position18>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="601" TopLine="553"/>
+        <Caret Line="611" Column="12" TopLine="580"/>
       </Position18>
       <Position19>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="604" TopLine="553"/>
+        <Caret Line="814" TopLine="764"/>
       </Position19>
       <Position20>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="605" TopLine="553"/>
+        <Caret Line="607" TopLine="580"/>
       </Position20>
       <Position21>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="607" TopLine="554"/>
+        <Caret Line="609" TopLine="580"/>
       </Position21>
       <Position22>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="609" TopLine="556"/>
+        <Caret Line="611" TopLine="580"/>
       </Position22>
       <Position23>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="611" TopLine="558"/>
+        <Caret Line="614" TopLine="580"/>
       </Position23>
       <Position24>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="612" TopLine="559"/>
+        <Caret Line="617" TopLine="580"/>
       </Position24>
       <Position25>
         <Filename Value="jsontest.lpr"/>
-        <Caret Line="609" Column="22" TopLine="559"/>
+        <Caret Line="619" TopLine="580"/>
       </Position25>
       <Position26>
-        <Filename Value="json.pas"/>
-        <Caret Line="685" Column="10" TopLine="644"/>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="621" TopLine="580"/>
       </Position26>
       <Position27>
-        <Filename Value="json.pas"/>
-        <Caret Line="241" Column="15" TopLine="209"/>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="624" TopLine="580"/>
       </Position27>
       <Position28>
-        <Filename Value="json.pas"/>
-        <Caret Line="1258" Column="3" TopLine="1251"/>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="626" TopLine="580"/>
       </Position28>
       <Position29>
-        <Filename Value="json.pas"/>
-        <Caret Line="139" Column="29" TopLine="111"/>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="3" Column="28"/>
       </Position29>
       <Position30>
-        <Filename Value="json.pas"/>
-        <Caret Line="1248" Column="21" TopLine="1203"/>
+        <Filename Value="jsontest.lpr"/>
+        <Caret Line="591" Column="66" TopLine="563"/>
       </Position30>
     </JumpHistory>
     <RunParams>

@@ -11,9 +11,9 @@ type
   end;
 
 var
-  Stream: TStream;
+  InStream, OutStream: TStream;
   Reader: TJsonReader;
-  Indentation: integer;
+  Writer: TJsonWriter;
   i: integer;
 
 const
@@ -21,7 +21,7 @@ const
 
 const
   samples: array of TTestCase = (
-   (Input:
+   (*(Input:
       '[' +
         '{' +
           '"name":"Alan Turing",' +
@@ -79,59 +79,56 @@ const
     (Input: '["a",]'),
     (Input: '[]'),
     (Input: '{"n": 003.14}'),
-    (Input: '{{123: 321} "c":42}')
+    (Input: '{{123: 321} "c":42}'),
+    (Input: '{"text": "cote \r\naiu e [/code" }'),
+    (Input: '["a]'), *)
+    (Input: '["\u41"]')
   )
 ;
 
-procedure Indent;
-var
-  i: integer;
+procedure PutString(const S: string);
 begin
-  for i := 0 to Indentation-1 do
-    Write('  ');
+  OutStream.Write(S[1], length(S));
+end;
+
+procedure LogError(const S: string);
+begin
+ {WriteLn(ErrOutput, } PutString(LineEnding + S + LineEnding);
 end;
 
 procedure ReadList;
 begin
-  WriteLn('[');
-  Inc(Indentation);
+  Writer.List;
   while Reader.Advance <> jnListEnd do
-  begin
-    Indent;
-    if ReadValue then
-      WriteLn(', ');
-  end;
-  Dec(Indentation);
-  Indent;
-  Write(']');
+    ReadValue;
+  Writer.ListEnd;
 end;
 
 procedure ReadDict;
 var
   Key: String;
 begin
-  WriteLn('{');
-  Inc(Indentation);
+  Writer.Dict;
 
   while Reader.Advance <> jnDictEnd do
   begin
-    if Reader.Error then
-      repeat
-        WriteLn({ErrOutput,} 'ERROR: ', Reader.LastErrorMessage);
-      until AbortOnFirstError or not Reader.Proceed;
-
-    if Reader.Key(Key) then
-    begin
-      Indent;
-      Write('"', Key, '": ');
-      if ReadValue then
-        WriteLn(', ');
-    end;
+    repeat
+      if Reader.Key(Key) then
+      begin
+        Writer.Key(Key);
+        ReadValue;
+      end
+      else if Reader.Error then
+      begin
+        LogError(Format('ERROR: %s', [Reader.LastErrorMessage]));
+        if not AbortOnFirstError and Reader.Proceed then
+          continue;
+      end;
+      break;
+    until false;
   end;
 
-  Dec(Indentation);
-  Indent;
-  Write('}');
+  Writer.DictEnd;
 end;
 
 function ReadValue: Boolean;
@@ -141,72 +138,79 @@ var
   dbl: double;
   Str: string;
   bool: Boolean;
-  fs: TFormatSettings;
 begin
-  Result := True;
-  fs.ThousandSeparator := #0;
-  fs.DecimalSeparator := '.';
+  repeat
+    Result := True;
 
-
-  if Reader.Error then
-    repeat
-      WriteLn({ErrOutput,} 'ERROR: ', Reader.LastErrorMessage);
-    until AbortOnFirstError or not Reader.Proceed;
-
-  if Reader.Number(i64) then
-    Write(i64)
-  else if Reader.Number(u64) then
-    Write(u64)
-  else if Reader.Number(dbl) then
-    Write(FloatToStr(dbl, fs))
-  else if Reader.Str(Str) then
-    Write('"', Str, '"')
-  else if Reader.List then
-    ReadList
-  else if Reader.Dict then
-    ReadDict
-  else if Reader.Null then
-    Write('null')
-  else if Reader.Bool(bool) then
-  begin
-    if bool then
-      Write('true')
+    if Reader.Number(i64) then
+      Writer.Number(i64)
+    else if Reader.Number(u64) then
+      Writer.Number(u64)
+    else if Reader.Number(dbl) then
+      Writer.Number(dbl)
+    else if Reader.Str(Str) then
+      Writer.Str(Str)
+    else if Reader.List then
+      ReadList
+    else if Reader.Dict then
+      ReadDict
+    else if Reader.Null then
+      Writer.Null
+    else if Reader.Bool(bool) then
+      Writer.Bool(bool)
+    else if Reader.Error then
+    begin
+      Result := false;
+      LogError(Format('ERROR: %s', [Reader.LastErrorMessage]));
+      if not AbortOnFirstError and Reader.Proceed then
+        continue;
+    end
     else
-      Write('false');
-  end
-  else
-    Result := False;
+      assert(false);
+
+    break;
+  until false;
 end;
 
-
 begin
-  (**)
+  {
+  OutStream := TIOStream.Create(iosOutPut);
   for i := low(samples) to high(samples) do
   begin 
-    Stream := nil;     
+    InStream := nil;
     Reader := nil;
+    Writer := nil;
+    PutString(Format('%s => ' + LineEnding, [samples[i].Input]));
     try
-      WriteLn(samples[i].Input, ' => ');
-      Stream := TStringStream.Create(samples[i].Input);    
-      Reader := TJsonReader.Create(Stream);
+      InStream := TStringStream.Create(samples[i].Input);
+      Reader := TJsonReader.Create(InStream);
+      Writer := TJsonWriter.Create(OutStream);
       ReadValue;
-      WriteLn('');
     finally
-      FreeAndNil(Stream);
+      FreeAndNil(InStream);
       FreeAndNil(Reader);
+      FreeAndNil(Writer);
     end;
+    PutString(LineEnding);
   end;
-  (**)
-  (*
-    Stream := nil;
-    Reader := nil;
-    try
-      Stream := TIOStream.Create(iosInput);
-      Reader := TJsonReader.Create(Stream);
-      ReadValue;
-    finally
-      FreeAndNil(Stream);   
-      FreeAndNil(Reader);
-    end;
-  *)
+  FreeAndNil(OutStream);
+  }
+  {}
+  InStream := nil;
+  OutStream := nil;
+  Reader := nil;
+  Writer := nil;
+  try
+    InStream := TIOStream.Create(iosInput);
+    OutStream := TIOStream.Create(iosOutPut);
+    Reader := TJsonReader.Create(InStream);
+    Writer := TJsonWriter.Create(OutStream);
+    ReadValue;
+  finally                  
+    FreeAndNil(Reader);
+    FreeAndNil(Writer);
+    FreeAndNil(InStream);
+    FreeAndNil(OutStream);
+  end;
+  {}
 end.

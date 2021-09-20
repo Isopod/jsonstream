@@ -608,7 +608,7 @@ begin
       assert(false);
     if not Reader.Proceed then
       assert(false);
-    if Reader.Proceed then
+    if not Reader.Proceed then
       assert(false);
 
     if not Reader.Number(num) then
