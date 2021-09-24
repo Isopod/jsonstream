@@ -11,8 +11,12 @@ type
 
   TJsonToken = (
     jtUnknown, jtEOF, jtDict, jtDictEnd, jtList, jtListEnd, jtComma, jtColon,
-    jtNumber, jtString, jtFalse, jtTrue, jtNull
+    jtNumber, jtDoubleQuote, jtSingleQuote, jtFalse, jtTrue, jtNull,
+    jtSingleLineComment, jtMultiLineComment
   );
+
+  TJsonFeature = (jfJson5);
+  TJsonFeatures = set of TJsonFeature;
 
   TJsonInternalState = (
     jsInitial,
@@ -57,6 +61,12 @@ type
     jeInvalidEscapeSequence
   );
 
+  TJsonStringMode = (
+    jsmDoubleQuoted,
+    jsmSingleQuoted,
+    jsmUnquoted
+  );
+
   PJsonState = ^TJsonState;
 
   TJsonString = string;
@@ -64,6 +74,7 @@ type
   { TJsonReader }
 
   TJsonReader = class
+  private
   protected
     FToken:      TJsonToken;
 
@@ -90,7 +101,8 @@ type
     FPos:        integer;
     // False for a regular string, true after error recovery when we encounter garbage tokens and
     // fallback to interpreting them as a string.
-    FFauxString: boolean;
+    //FFauxString: boolean;
+    FStringMode: TJsonStringMode;
     // If an error occurred during Str() or Key(), the part that has been read is temporarily
     // stored here between successive calls.
     FSavedStr:   TJsonString;
@@ -109,6 +121,8 @@ type
     FLastError:  TJsonError;
     FLastErrorMessage: TJsonString;
 
+    FFeatures: TJsonFeatures;
+
     // Tokenizer
     procedure GetToken;
 
@@ -120,10 +134,12 @@ type
 
     // Parsing helpers
     procedure RefillBuffer(LookAhead: integer = 0);
-    procedure SkipSpace;
+    procedure SkipSpace;       
+    procedure SkipGarbage;
+    procedure SkipSingleLineComment;
+    procedure SkipMultiLineComment;
     function  MatchString(const Str: TJsonString): Boolean;
     procedure ParseNumber;
-    //function  InitNumber: Boolean;
     procedure FinalizeNumber;
 
     // Skip helpers
@@ -137,12 +153,16 @@ type
     function  StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
     function  StrInternal(out S: TJsonString): Boolean;
 
+    //
+    function AcceptValue: boolean;
+    function AcceptKey: boolean;
+
     // Internal functions
     function  InternalAdvance: TJsonState;
     function  InternalProceed: Boolean;
     procedure InvalidOrUnexpectedToken(const Msg: TJsonString);
   public
-    constructor Create(Stream: TStream);
+    constructor Create(Stream: TStream; Features: TJsonFeatures=[]);
 
     // === General traversal ===
 
@@ -270,8 +290,10 @@ type
     FNeedComma: Boolean;
     FNeedColon: Boolean;
     FStructEmpty: Boolean;
-    FWritingstring: Boolean;
+    FWritingString: Boolean;
     FLevel: integer;
+    FFeatures: TJsonFeatures;
+
     procedure WriteSeparator(Indent: Boolean = true);
     procedure Write(const S: TJsonString);
     procedure WriteBuf(const Buf; BufSize: SizeInt);
@@ -297,9 +319,12 @@ type
 
 implementation
 
+uses
+  math;
+
 { TJsonReader }
 
-constructor TJsonReader.Create(Stream: TStream);
+constructor TJsonReader.Create(Stream: TStream; Features: TJsonFeatures);
 begin
   FStream    := Stream;
   FLen       := 0;
@@ -308,6 +333,7 @@ begin
   FSkipUntil := MaxInt;
   FSkip      := false;
   FSavedStr  := '';
+  FFeatures  := Features;
   StackPush(jsInitial);
   Advance;
 end;
@@ -325,17 +351,54 @@ begin
   assert((FPos < FLen) or (FLen = 0));
 end;
 
-procedure TJsonReader.SkipSpace;
+type
+  TSetOfChar = set of char;
+
+procedure SkipCharSet(Reader: TJsonReader; chars: TSetOfChar);
 begin
   repeat
-    while (FPos < FLen) and (FBuf[FPos] in [' ', #9, #13, #10]) do
-      Inc(FPos);
+    while (Reader.FPos < Reader.FLen) and (Reader.FBuf[Reader.FPos] in chars) do
+      Inc(Reader.FPos);
 
-    if FPos < FLen then
+    if Reader.FPos < Reader.FLen then
       break;
 
+    Reader.RefillBuffer;
+  until Reader.FLen <= 0;
+end;
+
+procedure TJsonReader.SkipSpace;
+begin
+  SkipCharSet(self, [' ', #9, #13, #10]);
+end;
+
+procedure TJsonReader.SkipGarbage;
+begin
+  SkipCharSet(self, [#0..#32]);
+end;
+
+procedure TJsonReader.SkipSingleLineComment;
+begin
+  SkipCharSet(Self, [#0..#255] - [#10, #13]);
+end;
+
+procedure TJsonReader.SkipMultiLineComment;
+begin
+  while true do
+  begin
+    SkipCharSet(Self, [#0..#255] - ['*']);
+    Inc(FPos);
+
     RefillBuffer;
-  until FLen <= 0;
+    if FLen <= 0 then
+      break;
+
+    if FBuf[FPos] = '/' then
+    begin
+      Inc(FPos);
+      break;
+    end;
+  end;
 end;
 
 procedure TJsonReader.SkipNumber;
@@ -386,6 +449,7 @@ var
 begin
   Result := false;
 
+  {
   if FLen - FPos < length(Str) then
   begin
     Move(FBuf[FPos], FBuf[0], FLen - FPos);
@@ -395,6 +459,8 @@ begin
     if n > 0 then
       FLen := FLen + n;
   end;
+  }
+  RefillBuffer(Length(Str));
 
   if FLen < length(Str) then
     exit;
@@ -409,6 +475,10 @@ begin
   Result := true;
 end;
 
+const
+  sInfinity = 'Infinity';
+  sNaN      = 'NaN';
+
 procedure TJsonReader.ParseNumber;
 var
   Buf: array[0..768-1 + 1 { sign }] of char;
@@ -417,6 +487,8 @@ var
   LeadingZeroes: integer;
   TmpExp:   integer;
   TmpExpSign: integer;
+label
+  Finalize;
 
   function SkipZero: integer;
   var
@@ -436,16 +508,16 @@ var
     end;
   end;
 
-  function ReadDigits: integer;
+  function ReadDigits(Digits: TSetOfChar=['0'..'9']): integer;
   var
     j: integer;
   begin
     Result := 0;
-    while (FLen >= 0) and (FBuf[FPos] in ['0'..'9']) do
+    while (FLen >= 0) and (FBuf[FPos] in Digits) do
     begin
       for j := FPos to FLen do
       begin
-        if not (FBuf[FPos] in ['0'..'9']) then
+        if not (FBuf[FPos] in Digits) then
           break;
         if n < sizeof(Buf) then
         begin
@@ -464,21 +536,64 @@ begin
   FNumber  := '';
   FNumberErr := false;
 
+  RefillBuffer(2);
+
+  // Hex number (JSON5)
+  if (jfJson5 in FFeatures) and (FBuf[FPos] = '0') and (FPos + 1 < FLen) and (FBuf[FPos + 1] in ['x', 'X']) then
+  begin
+    Inc(FPos, 2);
+    RefillBuffer;
+    Buf[n] := '$';
+    Inc(n);
+    if (ReadDigits(['0'..'9', 'a'..'f', 'A'..'F']) <= 0) then
+    begin
+      FNumberErr := true;
+      FLastError := jeInvalidNumber;
+      FLastErrorMessage := 'Invalid hexadecimal number.';
+    end;
+    goto Finalize;
+  end;
+
+  // NaN
+  if (jfJson5 in FFeatures) and MatchString(sNaN) then
+  begin
+    Move(sNaN[1], Buf[n], Length(sNaN));
+    Inc(FPos, Length(sNaN));
+    Inc(n, Length(sNaN));
+    goto Finalize;
+  end;
+
+  // Sign
   if FBuf[FPos] in ['-','+'] then
   begin
     // Leading + not allowed by JSON
-    if (FBuf[FPos] = '+') then
+    if (FBuf[FPos] = '+') and not (jfJson5 in FFeatures) then
     begin
       FNumberErr := true;  
       FLastError := jeInvalidNumber;
       FLastErrorMessage := 'Number has leading `+`.';
     end;
 
-    Buf[n] := FBuf[FPos];
-    Inc(n);
+    if (FBuf[FPos] = '-') then
+    begin
+      Buf[n] := FBuf[FPos];
+      Inc(n);
+    end;
+
     Inc(FPos);
     RefillBuffer;
   end;
+
+  // Infinity
+  if (jfJson5 in FFeatures) and MatchString(sInfinity) then
+  begin
+    Move(sInfinity[1], Buf[n], Length(sInfinity));
+    Inc(FPos, Length(sInfinity));
+    Inc(n, Length(sInfinity));
+    goto Finalize;
+  end;
+
+  // Decimal number
 
   LeadingZeroes := SkipZero;
 
@@ -500,7 +615,7 @@ begin
       // 0.something
       Inc(FPos);
       RefillBuffer;
-      // JSON required digit after decimal point
+      // JSON requires digit after decimal point
       if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
       begin
         FNumberErr := true;  
@@ -519,14 +634,14 @@ begin
   end
   else
   begin
-    // JSON number must have a digit before the decimal point
-    if ReadDigits <= 0 then
+    // JSON number must have a digit before the decimal point (except in JSON5)
+    if (ReadDigits <= 0) and not (jfJson5 in FFeatures) then
       FNumberErr := true;
     if FBuf[FPos] = '.' then
     begin
       Inc(FPos);
       RefillBuffer;
-      // JSON required digit after decimal point
+      // JSON requires digit after decimal point
       if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
       begin
         FNumberErr := true; 
@@ -557,9 +672,10 @@ begin
     begin
       if not (FBuf[FPos] in ['0'..'9']) then
         break;
-      // The Exponent range for double is from like -324 to +308 or something,
-      // we just want to make sure we don't overflow. Everything below or above
-      // will be rounded to -INF or +INF anyway.
+      // The exponent range for double is something like -324 to +308, i.e. the exponent will
+      // never have more than 3 digits. We just want to make sure we don't overflow for
+      // pathological inputs. Truncating the exponent is not a problem as values exceeding the
+      // possible exponent range will be rounded to -INF or +INF, anyway.
       if TmpExp < 10000 then
         TmpExp := TmpExp * 10 + (ord(FBuf[FPos]) - ord('0'));
 
@@ -568,6 +684,8 @@ begin
     Exponent := Exponent + TmpExpSign * TmpExp;
   end;
 
+Finalize:
+
   FNumber := Copy(Buf, 1, n);
   if Exponent <> 0 then
     FNumber := FNumber + 'e' + IntToStr(Exponent);
@@ -575,7 +693,7 @@ begin
 
   // Check if there is garbage at the end
   RefillBuffer;
-  if (FLen > 0) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) then
+  if (FLen > 0) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"', '/']) then
   begin
     StackPop; // Was never a number to begin with
     StackPush(jsError);
@@ -585,7 +703,7 @@ begin
 
     // Skip rest of token
     repeat
-      while (FPos < FLen) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) do
+      while (FPos < FLen) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"', '/']) do
         Inc(FPos);
 
       RefillBuffer;
@@ -613,6 +731,8 @@ begin
 
   assert(FPos < FLen);
 
+  FToken := jtUnknown;
+
   case FBuf[FPos] of
     '{':      FToken := jtDict;
     '}':      FToken := jtDictEnd;
@@ -622,24 +742,29 @@ begin
     ':':      FToken := jtColon;
     '0'..'9', '-', '+':
               FToken := jtNumber;
-    '"':      FToken := jtString;
-    't':
-      if MatchString('true') then
-        FToken := jtTrue
-      else
-        FToken := jtUnknown;
-    'f':
-      if MatchString('false') then
-        FToken := jtFalse
-      else
-        FToken := jtUnknown;
-    'n':
-      if MatchString('null') then
-        FToken := jtNull
-      else
-        FToken := jtUnknown;
-    else
-      FToken := jtUnknown;
+    '.':      if (jfJson5 in FFeatures) then
+                FToken := jtNumber;
+    'I':      if (jfJson5 in FFeatures) and MatchString('Infinity') then
+                FToken := jtNumber;
+    'N':      if (jfJson5 in FFeatures) and MatchString('NaN') then
+                FToken := jtNumber;
+    '"':      FToken := jtDoubleQuote;
+    '''':     if jfJson5 in FFeatures then
+                FToken := jtSingleQuote;
+    '/':      if jfJson5 in FFeatures then
+              begin
+                RefillBuffer(1);
+                if FBuf[FPos + 1] = '/' then
+                  FToken := jtSingleLineComment
+                else if FBuf[FPos + 1] = '*' then
+                  FToken := jtMultiLineComment;
+              end;
+    't':      if MatchString('true') then
+                FToken := jtTrue;
+    'f':      if MatchString('false') then
+                FToken := jtFalse;
+    'n':      if MatchString('null') then
+                FToken := jtNull;
   end;
 end;
 
@@ -784,7 +909,6 @@ begin
           break;
         end
       end;
-
     end;
 
     Result := FState;
@@ -801,42 +925,29 @@ begin
     exit;
   end;
 
+  // Note: The tokenizer only spits out comment tokens in JSON5 mode.
+  while FToken in [jtSingleLineComment, jtMultiLineComment] do
+  begin
+    case FToken of
+      jtSingleLineComment: SkipSingleLineComment;
+      jtMultiLineComment:  SkipMultiLineComment;
+    end;
+    GetToken;
+  end;
+
   case StackTop of
-    jsInitial: 
+    jsInitial:
       case FToken of
         jtEOF:
         begin
           FState := jnEOF;
           StackPop;
           StackPush(jsEOF);
-        end;
-        jtDict:
-        begin
-          FState := jnDict;
-          StackPush(jsDictHead);
-          Inc(FPos);
-        end;
-        jtList:
-        begin
-          FState := jnList;
-          StackPush(jsListHead);
-          Inc(FPos);
         end
-        {
-        jtNumber:
-          FState := jnNumber;
-          StackPush(jsNumber);
-          ParseNumber;
-        jtString:
-          FState := jnString;
-          StackPush(jsString);
-          FFauxString := false;
-          Inc(FPos);
-        }
-        else
+        else if not AcceptValue then
         begin
           FState := jnError;
-          InvalidOrUnexpectedToken('Expected `[` or `{`.');
+          InvalidOrUnexpectedToken('Expected `[` or `{`, number, boolean, string or null.');
           StackPush(jsError);
         end;
       end;
@@ -844,52 +955,9 @@ begin
       FState := jnEOF;
     jsListItem, jsListHead:
       case FToken of
-        jtDict:
-        begin
-          FState := jnDict;
-          StackPush(jsDictHead);
-          Inc(FPos);
-        end;
-        jtList:
-        begin
-          FState := jnList;
-          StackPush(jsListHead);
-          Inc(FPos);
-        end;
-        jtNumber:
-        begin
-          FState := jnNumber;
-          StackPush(jsNumber);
-          ParseNumber;
-        end;
-        jtTrue:
-        begin
-          FState := jnBoolean;
-          StackPush(jsBoolean);
-          Inc(FPos, Length('true'));
-        end;
-        jtFalse:
-        begin
-          FState := jnBoolean;
-          StackPush(jsBoolean);
-          Inc(FPos, Length('false'));
-        end;
-        jtNull:
-        begin
-          FState := jnNull;
-          StackPush(jsNull);
-          Inc(FPos, Length('null'));
-        end;
-        jtString:
-        begin
-          FState := jnString;
-          StackPush(jsString);
-          FFauxString := false;
-          Inc(FPos);
-        end;
         jtListEnd:
         begin
-          if StackTop = jsListHead then
+          if (StackTop = jsListHead) or (jfJson5 in FFeatures) then
           begin
             FState := jnListEnd;
             StackPop;
@@ -904,7 +972,7 @@ begin
             StackPush(jsError);
           end;
         end
-        else
+        else if not AcceptValue then
         begin
           FState := jnError;
           InvalidOrUnexpectedToken('Expected `[` or `{`, number, boolean, string or null.');
@@ -936,16 +1004,9 @@ begin
       end;
     jsDictItem, jsDictHead:
       case FToken of
-        jtString:
-        begin
-          FState := jnKey;
-          StackPush(jsDictKey);
-          FFauxString := false;
-          Inc(FPos);
-        end;
         jtDictEnd:
         begin
-          if StackTop = jsDictHead then
+          if (StackTop = jsDictHead) or (jfJson5 in FFeatures) then
           begin
             FState := jnDictEnd;
             StackPop; // DictItem
@@ -960,7 +1021,7 @@ begin
             StackPush(jsError);
           end;
         end
-        else
+        else if not AcceptKey then
         begin
           FState := jnError;   
           InvalidOrUnexpectedToken('Expected string or `}`.');
@@ -984,56 +1045,11 @@ begin
         end;
       end;
     jsDictValue: 
-      case FToken of
-        jtDict:
-        begin
-          FState := jnDict;
-          StackPush(jsDictHead);
-          Inc(FPos);
-        end;
-        jtList:
-        begin
-          FState := jnList;
-          StackPush(jsListHead);
-          Inc(FPos);
-        end;
-        jtNumber:
-        begin
-          FState := jnNumber;
-          StackPush(jsNumber);   
-          ParseNumber;
-        end;
-        jtTrue:
-        begin
-          FState := jnBoolean;
-          StackPush(jsBoolean);
-          Inc(FPos, Length('true'));
-        end;
-        jtFalse:
-        begin
-          FState := jnBoolean;
-          StackPush(jsBoolean);
-          Inc(FPos, Length('false'));
-        end;
-        jtNull:
-        begin
-          FState := jnNull;
-          StackPush(jsNull);
-          Inc(FPos, Length('null'));
-        end;
-        jtString:
-        begin
-          FState := jnString;
-          StackPush(jsString);
-          FFauxString := false;
-          Inc(FPos);
-        end
-        else
-        begin
-          FState := jnError;    
-          InvalidOrUnexpectedToken('Expected `[`, `{`, number, boolean, string or null.');
-          StackPush(jsError);
-        end;
+      if not AcceptValue then
+      begin
+        FState := jnError;
+        InvalidOrUnexpectedToken('Expected `[`, `{`, number, boolean, string or null.');
+        StackPush(jsError);
       end;
     jsAfterDictItem:
       case FToken of
@@ -1088,7 +1104,7 @@ begin
     jtNumber:
     begin    
       FLastError := jeUnexpectedToken;
-      FLastErrorMessage := Format('Unexpected numeric token. %s', [Msg]);
+      FLastErrorMessage := Format('Unexpected numeral. %s', [Msg]);
     end
     else
     begin
@@ -1117,6 +1133,13 @@ begin
   // Pop off the jsError state
   StackPop;
 
+  // Skip control characters/whitespace
+  if {(not (StackTop = jsString)) and} (FBuf[FPos] in [#0..#32]) then
+  begin
+    SkipGarbage;
+    exit;
+  end;
+
   // Treat garbage tokens as string
   if (FToken = jtUnknown) or
      (StackTop in [jsDictHead, jsDictItem]) and (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
@@ -1131,7 +1154,14 @@ begin
       StackPush(jsString);
       FState := jnString;
     end;
-    FFauxString := true;
+    //FFauxString := true;
+    if FBuf[FPos] = '''' then
+    begin
+      FStringMode := jsmSingleQuoted;
+      Inc(FPos);
+    end
+    else
+      FStringMode := jsmUnquoted;
     FSkip := true;
     Result := true;
     exit;
@@ -1139,7 +1169,7 @@ begin
 
   // List: missing comma
   if (StackTop = jsAfterListItem) and
-     (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtString]) then
+     (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtDoubleQuote]) then
   begin
     StackPop;
     StackPush(jsListItem);
@@ -1156,7 +1186,7 @@ begin
 
   // Dict: missing comma
   if (StackTop = jsAfterDictItem) and
-     (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtString]) then
+     (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtDoubleQuote]) then
   begin
     StackPop;
     StackPush(jsDictItem);
@@ -1164,7 +1194,7 @@ begin
   end;
 
   // Dict: trailing comma
-  if (StackTop = jsDictItem) and  (FToken = jtDictEnd) then
+  if (StackTop = jsDictItem) and (FToken = jtDictEnd) then
   begin
     StackPop;
     StackPush(jsAfterDictItem);
@@ -1253,7 +1283,16 @@ begin
   begin
     FStrIgnoreError := true;
     FSkip := true;
-    FState := jnString;     
+    FState := jnString;
+    Result := true;
+    exit;
+  end;
+
+  if StackTop = jsDictKey then
+  begin
+    FStrIgnoreError := true;
+    FSkip := true;
+    FState := jnKey;
     Result := true;
     exit;
   end;
@@ -1307,10 +1346,18 @@ var
 begin
   o1 := 0;
 
-  if FFauxString then
-    StopChars := [#0..#32, {'\',} ':', ',', '{', '}', '[', ']']
-  else
-    StopChars := ['\', '"'];
+  case FStringMode of
+    jsmDoubleQuoted: StopChars := ['\', '"'];
+    jsmSingleQuoted: StopChars := ['\', ''''];
+    jsmUnquoted:     StopChars := [#0..#32, {'\',} ':', ',', '{', '}', '[', ']'];
+  end;
+
+  // JSON strings must not contain line-breaks
+  StopChars := StopChars + [#13, #10];
+
+  // In pure JSON, all codepoints < 32 are not allowed and must be encoded using escape sequences, instead.
+  if not (jfJson5 in FFeatures) then
+    StopChars := StopChars + [#0..#31];
 
   FillByte(Buf, BufSize, 0);
 
@@ -1350,6 +1397,8 @@ begin
         FLastError := jeUnexpectedEOF;
         FLastErrorMessage := 'Unexpected end-of-file.';
       end;
+
+      FStrIgnoreError := false;
       break;
     end;
 
@@ -1369,10 +1418,13 @@ begin
         // EOF Before string end
         if not FStrIgnoreError then
         begin
-          FState := jnError;
+          FState := jnError;       
+          StackPush(jsError);
           FLastError := jeUnexpectedEOF;
           FLastErrorMessage := 'Unexpected end-of-file.';
         end;
+
+        FStrIgnoreError := false;
         break;
       end;
 
@@ -1387,13 +1439,18 @@ begin
           inc(k);
         end;
 
-        if (k < 4) and not FStrIgnoreError then
+        if (k < 4) then
         begin
-          FState := jnError; 
-          StackPush(jsError);
-          FLastError := jeInvalidEscapeSequence;
-          FLastErrorMessage := 'Invalid escape sequence in string. Expected four hex digits.';
-          break;
+          if not FStrIgnoreError then
+          begin
+            FState := jnError;
+            StackPush(jsError);
+            FLastError := jeInvalidEscapeSequence;
+            FLastErrorMessage := 'Invalid escape sequence in string. Expected four hex digits.';
+            break;
+          end;
+
+          FStrIgnoreError := false;
         end;
 
         if k = 0 then
@@ -1422,6 +1479,26 @@ begin
           't': c := #09;
           else
           begin
+            // JSON5 allows escaping of newline characters (stupid)
+            if jfJson5 in FFeatures then
+            begin
+              if (FBuf[FPos + 1] = #13) and (FBuf[FPos + 2] = #10) then
+              begin           
+                PChar(SizeUInt(@Buf) + o1)^ := c;
+                Move(#13#10, PChar(SizeUInt(@Buf) + o1)^, 2);
+                inc(o1, 2);
+                Inc(FPos, 3);
+                continue;
+              end
+              else if (FBuf[FPos + 1] = #10) then
+              begin    
+                PChar(SizeUInt(@Buf) + o1)^ := #10; 
+                inc(o1);
+                Inc(FPos, 2);
+                continue;
+              end;
+            end;
+
             if not FStrIgnoreError then
             begin
               FState := jnError;
@@ -1431,6 +1508,7 @@ begin
             end
             else
               c := FBuf[FPos + 1];
+            FStrIgnoreError := false;
           end;
         end;
         Inc(FPos, 2);
@@ -1438,9 +1516,33 @@ begin
         inc(o1);
       end;
     end
-    else
+    else if {(FBuf[FPos] in [#13, #10]) or ((FBuf[FPos] in [#0..#31]) and not (jfJson5 in FFeatures))}(FBuf[FPos] in [#0..#31]) and (FStringMode <> jsmUnquoted) then
     begin
+      // Invalid character
+      if not FStrIgnoreError then
+      begin
+        FState := jnError;     
+        StackPush(jsError);
+        FLastError := jeInvalidEscapeSequence;
+        FLastErrorMessage := 'Invalid character in string. Codepoints below 32 must be encoded using escape sequence (\u....).';
+        break;
+      end
+      else
+      begin
+        PChar(SizeUInt(@Buf) + o1)^ := FBuf[FPos];
+        Inc(FPos);
+        inc(o1);
+      end;    
+      FStrIgnoreError := false;
+    end
+    else
+    begin     
       // End of string
+      assert(
+        (FStringMode = jsmUnquoted) or
+        ((FStringMode = jsmDoubleQuoted) and (FBuf[FPos] = '"')) or
+        ((FStringMode = jsmSingleQuoted) and (FBuf[FPos] = ''''))
+      );
       break;
     end;
   end;
@@ -1451,7 +1553,7 @@ begin
 
   if (Result = 0) and (StackTop <> jsError) then
   begin
-    if not FFauxString then
+    if FStringMode <> jsmUnquoted then
       Inc(FPos);
     Reduce;
   end;
@@ -1490,6 +1592,113 @@ begin
   else
   begin
     FSavedStr := '';
+  end;
+end;
+
+function TJsonReader.AcceptValue: boolean;
+begin
+  Result := false;
+  case FToken of
+    jtDict:
+    begin
+      FState := jnDict;
+      StackPush(jsDictHead);
+      Inc(FPos);
+      Result := true;
+    end;
+    jtList:
+    begin
+      FState := jnList;
+      StackPush(jsListHead);
+      Inc(FPos);   
+      Result := true;
+    end;
+    jtNumber:
+    begin
+      FState := jnNumber;
+      StackPush(jsNumber);
+      ParseNumber;   
+      Result := true;
+    end;
+    jtTrue:
+    begin
+      FState := jnBoolean;
+      StackPush(jsBoolean);
+      Inc(FPos, Length('true'));      
+      Result := true;
+    end;
+    jtFalse:
+    begin
+      FState := jnBoolean;
+      StackPush(jsBoolean);
+      Inc(FPos, Length('false')); 
+      Result := true;
+    end;
+    jtNull:
+    begin
+      FState := jnNull;
+      StackPush(jsNull);
+      Inc(FPos, Length('null'));   
+      Result := true;
+    end;
+    jtDoubleQuote:
+    begin
+      FState := jnString;
+      StackPush(jsString);
+      //FFauxString := false;
+      FStringMode := jsmDoubleQuoted;
+      Inc(FPos);       
+      Result := true;
+    end;
+    jtSingleQuote:
+    begin
+      if jfJson5 in FFeatures then
+      begin
+        FState := jnString;
+        StackPush(jsString);
+        FStringMode := jsmSingleQuoted;
+        Inc(FPos);
+        Result := true;
+      end
+    end;
+  end;
+end;
+
+function TJsonReader.AcceptKey: boolean;
+begin
+  Result := false;
+  case FToken of
+    jtDoubleQuote:
+    begin
+      FState := jnKey;
+      StackPush(jsDictKey);
+      FStringMode := jsmDoubleQuoted;
+      Inc(FPos);
+      Result := true;
+    end;
+    jtSingleQuote:
+    begin
+      if jfJson5 in FFeatures then
+      begin
+        FState := jnKey;
+        StackPush(jsDictKey);
+        FStringMode := jsmSingleQuoted;
+        Inc(FPos);
+        Result := true;
+      end
+    end;
+    jtUnknown:
+    begin
+      // In JSON5, unquoted keys should match the JS identifier syntax, i.e. start
+      // with a letter or $ or _, but we allow other characters here to reduce code complexity.
+      if (jfJson5 in FFeatures) and not (FBuf[FPos] in [#0..#32]) then
+      begin
+        FState := jnKey;
+        StackPush(jsDictKey);
+        FStringMode := jsmUnquoted;
+        Result := true;
+      end
+    end;
   end;
 end;
 
@@ -1604,13 +1813,25 @@ begin
   FormatSettings.DecimalSeparator := '.';
   FormatSettings.ThousandSeparator := #0;
 
-  if (FState <> jnNumber) then
+  if FState <> jnNumber then
   begin
     Result := False;
     exit;
   end;
 
-  Result := TryStrToFloat(FNumber, Num, FormatSettings);
+  Result := true;
+
+  if not TryStrToFloat(FNumber, Num, FormatSettings) then
+  begin
+    if FNumber = sInfinity then
+      Num := math.Infinity
+    else if FNumber = '-' + sInfinity then
+      Num := math.NegInfinity
+    else if FNumber = sNan then
+      Num := math.NaN
+    else
+      Result := false;
+  end;
 
   if Result then
     FinalizeNumber;
@@ -1687,7 +1908,7 @@ constructor TJsonWriter.Create(Stream: TStream);
 begin
   FNeedComma := false;
   FNeedColon := false;
-  FWritingstring := false;
+  FWritingString := false;
   FStream := Stream;
 end;
 
@@ -1725,21 +1946,23 @@ procedure TJsonWriter.StrBufInternal(const Buf; BufSize: SizeInt; IsKey: Boolean
   );
 const
   ChunkSize = 256;
-  EntitySize = 2; // \" or \\
+  EntitySize = 6; // \u1234
+  HexDigits: array[0..15] of Char =
+    ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
 var
   Escaped: array[0 .. EntitySize * ChunkSize - 1] of Char;
   i, j, o, n: SizeInt;
   c: PChar;
 begin
-  if not FWritingstring then
+  if not FWritingString then
   begin
     WriteSeparator;
     Write('"');
-    FWritingstring := true;
+    FWritingString := true;
   end else if BufSize = 0 then
   begin
     Write('"');
-    FWritingstring := false;
+    FWritingString := false;
     if IsKey then
     begin
       FNeedComma := false;
@@ -1767,12 +1990,40 @@ begin
       if c^ in ['\', '"'] then
       begin
         Escaped[o] := '\';
+        Escaped[o+1] := c^;
+        Inc(o, 2);  
+        Inc(i);
+        Inc(c);
+      end
+      else if (c^ in [#10, #13]) or ((c^ in [#0..#31]) and not (jfJson5 in FFeatures)) then
+      begin
+        Escaped[o] := '\';
+        case c^ of
+          #08: begin Escaped[o+1] := 'b'; Inc(o, 2); end;
+          #12: begin Escaped[o+1] := 'f'; Inc(o, 2); end;
+          #10: begin Escaped[o+1] := 'n'; Inc(o, 2); end;
+          #13: begin Escaped[o+1] := 'r'; Inc(o, 2); end;
+          #09: begin Escaped[o+1] := 't'; Inc(o, 2); end;
+          else
+          begin
+            Escaped[o+1] := 'u';
+            Escaped[o+2] := '0';
+            Escaped[o+3] := '0';
+            Escaped[o+4] :=  HexDigits[Ord(c^) shr 4];
+            Escaped[o+5] :=  HexDigits[Ord(c^) and $f];
+            Inc(o, 6);
+          end;
+        end;   
+        Inc(i);
+        Inc(c);
+      end
+      else
+      begin
+        Escaped[o] := c^;
         Inc(o);
+        Inc(i);
+        Inc(c);
       end;
-      Escaped[o] := c^;
-      Inc(o);
-      Inc(i);
-      Inc(c);
     end;
 
     WriteBuf(Escaped, SizeOf(Char) * o);

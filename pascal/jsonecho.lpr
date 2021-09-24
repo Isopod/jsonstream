@@ -16,8 +16,9 @@ var
   Writer: TJsonWriter;
   i: integer;
 
-const
-  AbortOnFirstError: Boolean = false;
+//const
+  AbortOnFirstError: Boolean = true;
+  Features: TJsonFeatures;
 
 const
   samples: array of TTestCase = (
@@ -82,7 +83,13 @@ const
     (Input: '{{123: 321} "c":42}'),
     (Input: '{"text": "cote \r\naiu e [/code" }'),
     (Input: '["a]'), *)
-    (Input: '["\u41"]')
+    //(Input: '["\u41"]')
+    //(Input: '"a'#13#10'b"')
+    //(Input: '['#1']')
+    //(Input: '[a'#10'b]')
+   // (Input: '["abc\'#13#10'def\'#10'ghi"]')
+   //(Input: '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]')
+   (Input: '[-Infinity, 42]')
   )
 ;
 
@@ -172,8 +179,38 @@ begin
   until false;
 end;
 
+procedure PrintUsageAndExit;
 begin
-  {
+  WriteLn(ErrOutput, 'jsonecho [options]');
+  WriteLn(ErrOutput, 'Read a JSON file from standard input, parse it, and print it to standard ' +
+                     'output in standardized form, reporting any errors.');
+  WriteLn(ErrOutput, 'Options:');
+  WriteLn(ErrOutput, '  --json5    Accept JSON5 input, which is a superset of JSON.');
+  WriteLn(ErrOutput, '  --stubborn Try to fix syntax errors and continue parsing, instead of aborting on the first error.');
+  Halt(-1);
+end;
+
+procedure ParseOptions;
+var
+  i: integer;
+begin
+  i := 1;
+  while i <= ParamCount do
+  begin
+    if ParamStr(i) = '--json5' then
+      Features := Features + [jfJson5]
+    else if ParamStr(i) = '--stubborn' then
+      AbortOnFirstError := false
+    else
+      PrintUsageAndExit;
+    Inc(i);
+  end;
+end;
+
+begin
+  {$if 0}
+  AbortOnFirstError := false;
+  Features := [jfJSON5];
   OutStream := TIOStream.Create(iosOutPut);
   for i := low(samples) to high(samples) do
   begin 
@@ -183,7 +220,7 @@ begin
     PutString(Format('%s => ' + LineEnding, [samples[i].Input]));
     try
       InStream := TStringStream.Create(samples[i].Input);
-      Reader := TJsonReader.Create(InStream);
+      Reader := TJsonReader.Create(InStream, Features);
       Writer := TJsonWriter.Create(OutStream);
       ReadValue;
     finally
@@ -194,8 +231,9 @@ begin
     PutString(LineEnding);
   end;
   FreeAndNil(OutStream);
-  }
-  {}
+  {$else}
+  ParseOptions;
+
   InStream := nil;
   OutStream := nil;
   Reader := nil;
@@ -203,7 +241,7 @@ begin
   try
     InStream := TIOStream.Create(iosInput);
     OutStream := TIOStream.Create(iosOutPut);
-    Reader := TJsonReader.Create(InStream);
+    Reader := TJsonReader.Create(InStream, Features);
     Writer := TJsonWriter.Create(OutStream);
     ReadValue;
   finally                  
@@ -212,5 +250,5 @@ begin
     FreeAndNil(InStream);
     FreeAndNil(OutStream);
   end;
-  {}
+  {$endif}
 end.
