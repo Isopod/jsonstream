@@ -22,7 +22,7 @@ var
 
 const
   samples: array of TTestCase = (
-   (*(Input:
+   (Input:
       '[' +
         '{' +
           '"name":"Alan Turing",' +
@@ -82,14 +82,14 @@ const
     (Input: '{"n": 003.14}'),
     (Input: '{{123: 321} "c":42}'),
     (Input: '{"text": "cote \r\naiu e [/code" }'),
-    (Input: '["a]'), *)
-    //(Input: '["\u41"]')
-    //(Input: '"a'#13#10'b"')
-    //(Input: '['#1']')
-    //(Input: '[a'#10'b]')
-   // (Input: '["abc\'#13#10'def\'#10'ghi"]')
-   //(Input: '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]')
-   (Input: '[-Infinity, 42]')
+    (Input: '["a]'),
+    (Input: '["\u41"]'),
+    (Input: '"a'#13#10'b"'),
+    (Input: '['#1']'),
+    (Input: '[a'#10'b]'),
+    (Input: '["abc\'#13#10'def\'#10'ghi"]'),
+    (Input: '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]'),
+    (Input: '[-Infinity, 42]')
   )
 ;
 
@@ -208,7 +208,7 @@ begin
 end;
 
 begin
-  {$if 0}
+  {$if 1}
   AbortOnFirstError := false;
   Features := [jfJSON5];
   OutStream := TIOStream.Create(iosOutPut);
@@ -221,7 +221,7 @@ begin
     try
       InStream := TStringStream.Create(samples[i].Input);
       Reader := TJsonReader.Create(InStream, Features);
-      Writer := TJsonWriter.Create(OutStream);
+      Writer := TJsonWriter.Create(OutStream, Features);
       ReadValue;
     finally
       FreeAndNil(InStream);
@@ -242,7 +242,7 @@ begin
     InStream := TIOStream.Create(iosInput);
     OutStream := TIOStream.Create(iosOutPut);
     Reader := TJsonReader.Create(InStream, Features);
-    Writer := TJsonWriter.Create(OutStream);
+    Writer := TJsonWriter.Create(OutStream, Features);
     ReadValue;
   finally                  
     FreeAndNil(Reader);

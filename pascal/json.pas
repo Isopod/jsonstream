@@ -52,13 +52,19 @@ type
   );
 
   TJsonError = (
+    jeNoError = 0,
+    // Reader errors
     jeInvalidToken,
     jeInvalidNumber,
     jeUnexpectedToken,
     jeUnexpectedListEnd,
     jeUnexpectedDictEnd,
     jeUnexpectedEOF,
-    jeInvalidEscapeSequence
+    jeInvalidEscapeSequence//,
+    // Writer errors
+    //jeUnsupportedValue,
+    //jeSyntaxError,
+    //jeStreamError
   );
 
   TJsonStringMode = (
@@ -133,7 +139,7 @@ type
     procedure Reduce;
 
     // Parsing helpers
-    procedure RefillBuffer(LookAhead: integer = 0);
+    procedure RefillBuffer(LookAhead: integer = 1);
     procedure SkipSpace;       
     procedure SkipGarbage;
     procedure SkipSingleLineComment;
@@ -154,8 +160,8 @@ type
     function  StrInternal(out S: TJsonString): Boolean;
 
     //
-    function AcceptValue: boolean;
-    function AcceptKey: boolean;
+    function  AcceptValue: boolean;
+    function  AcceptKey: boolean;
 
     // Internal functions
     function  InternalAdvance: TJsonState;
@@ -284,6 +290,11 @@ type
 
   { TJsonWriter }
 
+  EJsonWriterError = class(Exception);
+
+  EJsonWriterUnsupportedValue = class(EJsonWriterError);
+  EJsonWriterSyntaxError = class(EJsonWriterError);
+
   TJsonWriter = class
   protected
     FStream: TStream;
@@ -294,12 +305,29 @@ type
     FLevel: integer;
     FFeatures: TJsonFeatures;
 
+    FStack: array of TJsonInternalState;
+    //FLastError: TJsonError;
+    //FLastErrorMessage: TJsonString;
+
+    FFatalError: Boolean;
+
     procedure WriteSeparator(Indent: Boolean = true);
     procedure Write(const S: TJsonString);
     procedure WriteBuf(const Buf; BufSize: SizeInt);
     procedure StrBufInternal(const Buf; BufSize: SizeInt; IsKey: Boolean);
+
+    procedure ValueBegin(const Kind: String);
+    procedure ValueEnd;
+    procedure KeyBegin;
+    procedure KeyEnd;
+
+    function  StackTop: TJsonInternalState;
+    procedure StackPush(State: TJsonInternalState);
+    function  StackPop: TJsonInternalState;
+
+    procedure RaiseFatalError(E: Exception);
   public
-    constructor Create(Stream: TStream);
+    constructor Create(Stream: TStream; Features: TJsonFeatures=[]);
 
     procedure Key(const K: TJsonString);
     procedure KeyBuf(const Buf; BufSize: SizeInt);
@@ -308,6 +336,7 @@ type
     procedure Number(Num: integer); overload;
     procedure Number(Num: int64); overload;
     procedure Number(Num: uint64); overload;
+    procedure NumberHex(Num: uint64); overload;
     procedure Number(Num: double); overload;
     procedure Bool(Bool: Boolean);
     procedure Null;
@@ -315,6 +344,12 @@ type
     procedure DictEnd;
     procedure List;
     procedure ListEnd;
+
+    // Return last error code. A return value of 0 means that there was no
+    // error. A return value other than 0 indicates that there was an error.
+    //function  LastError: TJsonError;       
+    // Return error message for last error.
+    //function  LastErrorMessage: TJsonString;
   end;
 
 implementation
@@ -334,18 +369,28 @@ begin
   FSkip      := false;
   FSavedStr  := '';
   FFeatures  := Features;
+  FLastError := jeNoError;
   StackPush(jsInitial);
   Advance;
 end;
 
 procedure TJsonReader.RefillBuffer(LookAhead: integer);
+var
+  Delta: LongInt;
 begin
-  if FPos + LookAhead >= FLen then
+  if FPos + LookAhead > FLen then
   begin
     assert(FPos <= FLen);
     Move(FBuf[FPos], FBuf[0], FLen - FPos);
-    FLen := FStream.Read(FBuf[FLen - FPos], length(FBuf) - (FLen - FPos)) + (FLen - FPos);
+    FLen := FLen - FPos;         
     FPos := 0;
+
+    repeat
+      Delta := FStream.Read(FBuf[Flen], length(FBuf) - FLen);
+      if Delta <= 0 then
+        break;
+      Inc(FLen, Delta);
+    until FPos + LookAhead <= FLen;
   end;
 
   assert((FPos < FLen) or (FLen = 0));
@@ -449,17 +494,6 @@ var
 begin
   Result := false;
 
-  {
-  if FLen - FPos < length(Str) then
-  begin
-    Move(FBuf[FPos], FBuf[0], FLen - FPos);
-    FLen := FLen - FPos;
-    FPos := 0;
-    n := FStream.Read(FBuf[FLen], length(FBuf) - FLen);
-    if n > 0 then
-      FLen := FLen + n;
-  end;
-  }
   RefillBuffer(Length(Str));
 
   if FLen < length(Str) then
@@ -1904,12 +1938,16 @@ end;
 
 { TJsonWriter }
 
-constructor TJsonWriter.Create(Stream: TStream);
+constructor TJsonWriter.Create(Stream: TStream; Features: TJsonFeatures);
 begin
   FNeedComma := false;
   FNeedColon := false;
   FWritingString := false;
   FStream := Stream;
+  FFeatures := Features;    
+  //FLastError := jeNoError;
+  //FLastErrorMessage := '';
+  StackPush(jsInitial);
 end;
 
 procedure TJsonWriter.WriteSeparator(Indent: Boolean);
@@ -1931,16 +1969,34 @@ begin
   FStructEmpty := false;
 end;
 
+
 procedure TJsonWriter.Write(const S: TJsonString);
 begin
-  FStream.Write(S[1], length(S));
+  WriteBuf(S[1], length(S));
 end;
 
 procedure TJsonWriter.WriteBuf(const Buf; BufSize: SizeInt);
+var
+  i: SizeInt;
+  Written: LongInt;
+  Ptr: PByte;
 begin
-  FStream.Write(Buf, BufSize);
+  i := 0;
+  Ptr := @Buf;
+  while i < BufSize do
+  begin
+    Written := FStream.Write(Ptr^, BufSize - i);
+    if Written <= 0 then
+    begin
+      //FLastError := jeStreamError;
+      //FLastErrorMessage(Format('Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]));
+      //break;
+      RaiseFatalError(EStreamError.CreateFmt('Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]));
+    end;
+    inc(Ptr, Written);
+    Inc(i, Written);
+  end;
 end;
-
 
 procedure TJsonWriter.StrBufInternal(const Buf; BufSize: SizeInt; IsKey: Boolean
   );
@@ -2030,80 +2086,216 @@ begin
   end;
 end;
 
+procedure TJsonWriter.KeyBegin;
+begin
+  if StackTop <> jsDictItem then
+    RaiseFatalError(EJsonWriterSyntaxError.Create('Unexpected key.'));
+end;
+
+procedure TJsonWriter.KeyEnd;
+begin
+  Assert(StackTop = jsDictKey);
+  StackPop;
+  StackPush(jsDictValue);
+end;
+
+procedure TJsonWriter.ValueBegin(const Kind: String);
+begin
+  if not (StackTop in [jsInitial, jsListItem, jsDictValue]) then
+    RaiseFatalError(EJsonWriterSyntaxError.CreateFmt('Unexpected %s', [Kind]));
+end;
+
+procedure TJsonWriter.ValueEnd;
+begin
+  case StackPop of
+    jsInitial:   StackPush(jsEOF);
+    jsListItem:  StackPush(jsListItem);
+    jsDictValue: StackPush(jsDictItem);
+    else         assert(false);
+  end;
+end;
+
+function TJsonWriter.StackTop: TJsonInternalState;
+begin
+  assert(Length(FStack) > 0);
+  Result := FStack[High(FStack)];
+end;
+
+procedure TJsonWriter.StackPush(State: TJsonInternalState);
+begin
+  SetLength(FStack, Length(FStack) + 1);
+  FStack[High(FStack)] := State;
+end;
+
+function TJsonWriter.StackPop: TJsonInternalState;
+begin
+  assert(Length(FStack) > 0);
+  Result := FStack[High(FStack)];
+  SetLength(FStack, Length(FStack) - 1);
+end;
+
+procedure TJsonWriter.RaiseFatalError(E: Exception);
+begin
+  FFatalError := true;
+  raise E;
+end;
+
 procedure TJsonWriter.Key(const K: TJsonString);
 begin
+  KeyBegin;
+
   StrBufInternal(K[1], SizeOf(Char) * Length(K), true);
   StrBufInternal(PChar(nil)^, 0, true);
+
+  StackPop;
+  StackPush(jsDictValue);
 end;
 
 procedure TJsonWriter.KeyBuf(const Buf; BufSize: SizeInt);
+var
+  IsEnd: Boolean;
 begin
+  IsEnd := (BufSize = 0) and (StackTop = jsDictKey);
+
+  if not IsEnd then
+    KeyBegin;
+
   StrBufInternal(Buf, BufSize, true);
+
+  if IsEnd then
+    KeyEnd;
 end;
 
 procedure TJsonWriter.Str(const S: TJsonString);
 begin
+  ValueBegin('string');
+
   StrBufInternal(S[1], SizeOf(Char) * Length(S), false);
   StrBufInternal(PChar(nil)^, 0, false);
+
+  ValueEnd;
 end;
 
 procedure TJsonWriter.StrBuf(const Buf; BufSize: SizeInt);
+var
+  IsEnd: Boolean;
 begin
+  IsEnd := (BufSize = 0) and (StackTop = jsDictKey);
+
+  if not IsEnd then
+    ValueBegin('string');
+
   StrBufInternal(Buf, BufSize, false);
+
+  if not IsEnd then
+    ValueEnd;
 end;
 
 procedure TJsonWriter.Number(Num: integer);
 begin
+  ValueBegin('number');
+
   WriteSeparator;
   Write(IntToStr(Num));
   FNeedComma := true;
+
+  ValueEnd;
 end;
 
 procedure TJsonWriter.Number(Num: int64);
 begin
+  ValueBegin('number');
+
   WriteSeparator;
   Write(IntToStr(Num));
   FNeedComma := true;
+
+  ValueEnd;
 end;
 
 procedure TJsonWriter.Number(Num: uint64);
 begin
+  ValueBegin('number');
+
   WriteSeparator;
   Write(UIntToStr(Num));
+  FNeedComma := true;  
+
+  ValueEnd;
+end;
+
+procedure TJsonWriter.NumberHex(Num: uint64);
+begin
+  ValueBegin('number');
+
+  WriteSeparator;
+  if jfJson5 in FFeatures then
+    Write('0x'+IntToHex(Num))
+  else
+    Write(UIntToStr(Num));
   FNeedComma := true;
+
+  ValueEnd;
 end;
 
 procedure TJsonWriter.Number(Num: double);
 var
   fs: TFormatSettings;
 begin
+  ValueBegin('number');
+
   fs.ThousandSeparator := #0;
   fs.DecimalSeparator := '.';
-  // TODO: Check if Num is a valid JSON number (i.e. not NaN or Inf)
+
+  if (IsNan(Num) or IsInfinite(Num)) and not (jfJson5 in FFeatures) then
+    raise EJsonWriterUnsupportedValue.Create('The values NaN and +/-Inf are not supported by the JSON standard. (Add jfJson5 to Features to be able to use them)');
+
   WriteSeparator;
-  Write(FloatToStr(Num, fs));
-  FNeedComma := true;
+
+  if IsNan(Num) and (jfJson5 in FFeatures) then
+    Write('NaN')
+  else if IsInfinite(Num) and (Num < 0) and (jfJson5 in FFeatures) then
+    Write('Infinity')
+  else if IsInfinite(Num) and (Num > 0) and (jfJson5 in FFeatures) then
+    Write('-Infinity')
+  else
+    Write(FloatToStr(Num, fs));
+
+  FNeedComma := true;  
+
+  ValueEnd;
 end;
 
 procedure TJsonWriter.Bool(Bool: Boolean);
 begin
+  ValueBegin('boolean');
+
   WriteSeparator;
   if Bool then
     Write('true')
   else
     Write('false');
-  FNeedComma := true;
+  FNeedComma := true;   
+
+  ValueEnd;
 end;
 
 procedure TJsonWriter.Null;
-begin    
+begin
+  ValueBegin('null');
+
   WriteSeparator;
   Write('null');
-  FNeedComma := true;
+  FNeedComma := true;   
+
+  ValueEnd;
 end;
 
 procedure TJsonWriter.Dict;
 begin
+  ValueBegin('dict'); 
+  StackPush(jsDictItem);
+
   WriteSeparator;
   Write('{');
   FNeedComma := false;    
@@ -2113,6 +2305,9 @@ end;
 
 procedure TJsonWriter.DictEnd;
 begin
+  if StackTop <> jsDictItem then
+    RaiseFatalError(EJsonWriterSyntaxError.Create('Unexpected dict end.'));
+
   FNeedComma := false;
   Dec(FLevel);
   if not FStructEmpty then
@@ -2123,10 +2318,16 @@ begin
   Write('}');
   FNeedComma := true;   
   FStructEmpty := false;
+
+  StackPop;
+  ValueEnd;
 end;
 
 procedure TJsonWriter.List;
-begin
+begin      
+  ValueBegin('list');
+  StackPush(jsListItem);
+
   WriteSeparator;
   Write('[');
   FNeedComma := false;
@@ -2135,7 +2336,10 @@ begin
 end;
 
 procedure TJsonWriter.ListEnd;
-begin             
+begin                    
+  if StackTop <> jsListItem then
+    RaiseFatalError(EJsonWriterSyntaxError.Create('Unexpected list end.'));
+
   FNeedComma := false;
   Dec(FLevel);
   if not FStructEmpty then
@@ -2145,7 +2349,22 @@ begin
   end;
   Write(']');
   FNeedComma := true;  
-  FStructEmpty := false;
+  FStructEmpty := false;   
+
+  StackPop;
+  ValueEnd;
 end;
+
+{
+function TJsonWriter.LastError: TJsonError;
+begin
+  Result := FLastError;
+end;
+
+function TJsonWriter.LastErrorMessage: TJsonString;
+begin
+  Result := FLastErrorMessage;
+end;
+}
 
 end.
