@@ -53,18 +53,14 @@ type
 
   TJsonError = (
     jeNoError = 0,
-    // Reader errors
     jeInvalidToken,
     jeInvalidNumber,
     jeUnexpectedToken,
     jeUnexpectedListEnd,
     jeUnexpectedDictEnd,
     jeUnexpectedEOF,
-    jeInvalidEscapeSequence//,
-    // Writer errors
-    //jeUnsupportedValue,
-    //jeSyntaxError,
-    //jeStreamError
+    jeInvalidEscapeSequence,
+    jeNestingTooDeep
   );
 
   TJsonStringMode = (
@@ -80,7 +76,6 @@ type
   { TJsonReader }
 
   TJsonReader = class
-  private
   protected
     FToken:      TJsonToken;
 
@@ -105,9 +100,7 @@ type
     FBuf:        array[0..1023] of Char;
     FLen:        integer;
     FPos:        integer;
-    // False for a regular string, true after error recovery when we encounter garbage tokens and
-    // fallback to interpreting them as a string.
-    //FFauxString: boolean;
+    // Delimiter of the current string (double-quote, single-quote, or word boundary)
     FStringMode: TJsonStringMode;
     // If an error occurred during Str() or Key(), the part that has been read is temporarily
     // stored here between successive calls.
@@ -116,6 +109,14 @@ type
 
     FStack:      array of TJsonInternalState;
     FState:      TJsonState;
+
+    // Nesting depth of structures (lists + dicts), e.g. "[[" would be depth 2. This is different
+    // from Length(FStack) because FStack contains internal nodes such as jsDictValue etc..
+    // This is checked against MaxNestingDepth and an error is generated if the maximum nesting
+    // depth is exceeded. The purpose of this is to guarantee an upper bound on memory consumption
+    // that doesn't grow linearly with the input in the worst case.
+    FNestingDepth: integer;
+    FMaxNestingDepth: integer;
 
     // Stack depth up until which we must pop after an error.
     FPopUntil:   integer;
@@ -168,7 +169,7 @@ type
     function  InternalProceed: Boolean;
     procedure InvalidOrUnexpectedToken(const Msg: TJsonString);
   public
-    constructor Create(Stream: TStream; Features: TJsonFeatures=[]);
+    constructor Create(Stream: TStream; Features: TJsonFeatures=[]; MaxNestingDepth: integer =MaxInt);
 
     // === General traversal ===
 
@@ -306,10 +307,6 @@ type
     FFeatures: TJsonFeatures;
 
     FStack: array of TJsonInternalState;
-    //FLastError: TJsonError;
-    //FLastErrorMessage: TJsonString;
-
-    FFatalError: Boolean;
 
     procedure WriteSeparator(Indent: Boolean = true);
     procedure Write(const S: TJsonString);
@@ -324,8 +321,6 @@ type
     function  StackTop: TJsonInternalState;
     procedure StackPush(State: TJsonInternalState);
     function  StackPop: TJsonInternalState;
-
-    procedure RaiseFatalError(E: Exception);
   public
     constructor Create(Stream: TStream; Features: TJsonFeatures=[]);
 
@@ -344,12 +339,6 @@ type
     procedure DictEnd;
     procedure List;
     procedure ListEnd;
-
-    // Return last error code. A return value of 0 means that there was no
-    // error. A return value other than 0 indicates that there was an error.
-    //function  LastError: TJsonError;       
-    // Return error message for last error.
-    //function  LastErrorMessage: TJsonString;
   end;
 
 implementation
@@ -359,7 +348,8 @@ uses
 
 { TJsonReader }
 
-constructor TJsonReader.Create(Stream: TStream; Features: TJsonFeatures);
+constructor TJsonReader.Create(Stream: TStream; Features: TJsonFeatures;
+  MaxNestingDepth: integer);
 begin
   FStream    := Stream;
   FLen       := 0;
@@ -370,6 +360,7 @@ begin
   FSavedStr  := '';
   FFeatures  := Features;
   FLastError := jeNoError;
+  FMaxNestingDepth := MaxNestingDepth;
   StackPush(jsInitial);
   Advance;
 end;
@@ -929,11 +920,13 @@ begin
         jsListItem, jsListHead, jsAfterListItem:
         begin
           FState := jnListEnd;
+          Dec(FNestingDepth);
           break;
         end;
         jsDictItem, jsDictHead, jsAfterDictItem:
         begin
-          FState := jnDictEnd;
+          FState := jnDictEnd; 
+          Dec(FNestingDepth);
           break;
         end;
         jsInitial, jsEOF:
@@ -1028,6 +1021,7 @@ begin
           StackPop;
           Reduce;
           Inc(FPos);
+          Dec(FNestingDepth);
         end
         else
         begin
@@ -1099,7 +1093,8 @@ begin
           FState := jnDictEnd;
           StackPop; // AfterDictItem
           Reduce;
-          Inc(FPos);
+          Inc(FPos);             
+          Dec(FNestingDepth);
         end
         else
         begin
@@ -1635,16 +1630,40 @@ begin
   case FToken of
     jtDict:
     begin
-      FState := jnDict;
-      StackPush(jsDictHead);
-      Inc(FPos);
+      if FNestingDepth >= FMaxNestingDepth then
+      begin
+        FState := jnError;
+        FPopUntil := 0;
+        StackPush(jsError);
+        FLastError := jeNestingTooDeep;
+        FLastErrorMessage := Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]);
+      end
+      else
+      begin
+        FState := jnDict;
+        StackPush(jsDictHead);
+        Inc(FPos);       
+        Inc(FNestingDepth);
+      end;
       Result := true;
     end;
     jtList:
     begin
-      FState := jnList;
-      StackPush(jsListHead);
-      Inc(FPos);   
+      if FNestingDepth >= FMaxNestingDepth then
+      begin
+        FState := jnError;
+        FPopUntil := 0;
+        StackPush(jsError);  
+        FLastError := jeNestingTooDeep; 
+        FLastErrorMessage := Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]);
+      end
+      else
+      begin
+        FState := jnList;
+        StackPush(jsListHead);
+        Inc(FPos);
+        Inc(FNestingDepth);
+      end;
       Result := true;
     end;
     jtNumber:
@@ -1679,7 +1698,6 @@ begin
     begin
       FState := jnString;
       StackPush(jsString);
-      //FFauxString := false;
       FStringMode := jsmDoubleQuoted;
       Inc(FPos);       
       Result := true;
@@ -1944,9 +1962,7 @@ begin
   FNeedColon := false;
   FWritingString := false;
   FStream := Stream;
-  FFeatures := Features;    
-  //FLastError := jeNoError;
-  //FLastErrorMessage := '';
+  FFeatures := Features;
   StackPush(jsInitial);
 end;
 
@@ -1987,12 +2003,7 @@ begin
   begin
     Written := FStream.Write(Ptr^, BufSize - i);
     if Written <= 0 then
-    begin
-      //FLastError := jeStreamError;
-      //FLastErrorMessage(Format('Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]));
-      //break;
-      RaiseFatalError(EStreamError.CreateFmt('Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]));
-    end;
+      raise EStreamError.CreateFmt('Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]);
     inc(Ptr, Written);
     Inc(i, Written);
   end;
@@ -2089,7 +2100,7 @@ end;
 procedure TJsonWriter.KeyBegin;
 begin
   if StackTop <> jsDictItem then
-    RaiseFatalError(EJsonWriterSyntaxError.Create('Unexpected key.'));
+    raise EJsonWriterSyntaxError.Create('Unexpected key.');
 end;
 
 procedure TJsonWriter.KeyEnd;
@@ -2102,7 +2113,7 @@ end;
 procedure TJsonWriter.ValueBegin(const Kind: String);
 begin
   if not (StackTop in [jsInitial, jsListItem, jsDictValue]) then
-    RaiseFatalError(EJsonWriterSyntaxError.CreateFmt('Unexpected %s', [Kind]));
+    raise EJsonWriterSyntaxError.CreateFmt('Unexpected %s', [Kind]);
 end;
 
 procedure TJsonWriter.ValueEnd;
@@ -2132,12 +2143,6 @@ begin
   assert(Length(FStack) > 0);
   Result := FStack[High(FStack)];
   SetLength(FStack, Length(FStack) - 1);
-end;
-
-procedure TJsonWriter.RaiseFatalError(E: Exception);
-begin
-  FFatalError := true;
-  raise E;
 end;
 
 procedure TJsonWriter.Key(const K: TJsonString);
@@ -2306,7 +2311,7 @@ end;
 procedure TJsonWriter.DictEnd;
 begin
   if StackTop <> jsDictItem then
-    RaiseFatalError(EJsonWriterSyntaxError.Create('Unexpected dict end.'));
+    raise EJsonWriterSyntaxError.Create('Unexpected dict end.');
 
   FNeedComma := false;
   Dec(FLevel);
@@ -2338,7 +2343,7 @@ end;
 procedure TJsonWriter.ListEnd;
 begin                    
   if StackTop <> jsListItem then
-    RaiseFatalError(EJsonWriterSyntaxError.Create('Unexpected list end.'));
+    raise EJsonWriterSyntaxError.Create('Unexpected list end.');
 
   FNeedComma := false;
   Dec(FLevel);
@@ -2354,17 +2359,5 @@ begin
   StackPop;
   ValueEnd;
 end;
-
-{
-function TJsonWriter.LastError: TJsonError;
-begin
-  Result := FLastError;
-end;
-
-function TJsonWriter.LastErrorMessage: TJsonString;
-begin
-  Result := FLastErrorMessage;
-end;
-}
 
 end.

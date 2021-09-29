@@ -18,6 +18,7 @@ var
 
 //const
   AbortOnFirstError: Boolean = true;
+  NestingDepth: integer = MaxInt;
   Features: TJsonFeatures;
 
 const
@@ -185,8 +186,9 @@ begin
   WriteLn(ErrOutput, 'Read a JSON file from standard input, parse it, and print it to standard ' +
                      'output in standardized form, reporting any errors.');
   WriteLn(ErrOutput, 'Options:');
-  WriteLn(ErrOutput, '  --json5    Accept JSON5 input, which is a superset of JSON.');
-  WriteLn(ErrOutput, '  --stubborn Try to fix syntax errors and continue parsing, instead of aborting on the first error.');
+  WriteLn(ErrOutput, '  --json5         Accept JSON5 input, which is a superset of JSON.');
+  WriteLn(ErrOutput, '  --stubborn      Try to fix syntax errors and continue parsing, instead of aborting on the first error.');
+  WriteLn(ErrOutput, '  --max-depth <n> Maximum nesting depth (of lists and dicts). If this depth is exceeded, parsing is aborted.');
   Halt(-1);
 end;
 
@@ -201,6 +203,8 @@ begin
       Features := Features + [jfJson5]
     else if ParamStr(i) = '--stubborn' then
       AbortOnFirstError := false
+    else if (ParamStr(i) = '--max-depth') and TryStrToInt(ParamStr(i+1), NestingDepth) then
+      Inc(i)
     else
       PrintUsageAndExit;
     Inc(i);
@@ -208,7 +212,7 @@ begin
 end;
 
 begin
-  {$if 1}
+  {$if 0}
   AbortOnFirstError := false;
   Features := [jfJSON5];
   OutStream := TIOStream.Create(iosOutPut);
@@ -220,7 +224,7 @@ begin
     PutString(Format('%s => ' + LineEnding, [samples[i].Input]));
     try
       InStream := TStringStream.Create(samples[i].Input);
-      Reader := TJsonReader.Create(InStream, Features);
+      Reader := TJsonReader.Create(InStream, Features, NestingDepth);
       Writer := TJsonWriter.Create(OutStream, Features);
       ReadValue;
     finally
@@ -241,7 +245,7 @@ begin
   try
     InStream := TIOStream.Create(iosInput);
     OutStream := TIOStream.Create(iosOutPut);
-    Reader := TJsonReader.Create(InStream, Features);
+    Reader := TJsonReader.Create(InStream, Features, NestingDepth);
     Writer := TJsonWriter.Create(OutStream, Features);
     ReadValue;
   finally                  
