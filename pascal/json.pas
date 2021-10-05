@@ -8,34 +8,11 @@ uses
   SysUtils, Classes;
 
 type
-
-  TJsonToken = (
-    jtUnknown, jtEOF, jtDict, jtDictEnd, jtList, jtListEnd, jtComma, jtColon,
-    jtNumber, jtDoubleQuote, jtSingleQuote, jtFalse, jtTrue, jtNull,
-    jtSingleLineComment, jtMultiLineComment
-  );
+  TJsonString = string;
+  TJsonChar = char;
 
   TJsonFeature = (jfJson5);
   TJsonFeatures = set of TJsonFeature;
-
-  TJsonInternalState = (
-    jsInitial,
-    jsError,
-    jsEOF,
-    jsListHead,
-    jsAfterListItem,
-    jsListItem,
-    jsDictHead,
-    jsDictItem,
-    jsAfterDictItem,
-    jsDictKey,
-    jsAfterDictKey,
-    jsDictValue,
-    jsNumber,
-    jsBoolean,
-    jsNull,
-    jsString
-  );
 
   TJsonState = (
     jnError,
@@ -63,22 +40,65 @@ type
     jeNestingTooDeep
   );
 
+  // Internal types
+
+  TJsonToken = (
+    jtUnknown, jtEOF, jtDict, jtDictEnd, jtList, jtListEnd, jtComma, jtColon,
+    jtNumber, jtDoubleQuote, jtSingleQuote, jtFalse, jtTrue, jtNull,
+    jtSingleLineComment, jtMultiLineComment
+  );
+
+  TJsonInternalState = (
+    jsInitial,
+    jsError,
+    jsEOF,
+    jsListHead,
+    jsAfterListItem,
+    jsListItem,
+    jsDictHead,
+    jsDictItem,
+    jsAfterDictItem,
+    jsDictKey,
+    jsAfterDictKey,
+    jsDictValue,
+    jsNumber,
+    jsBoolean,
+    jsNull,
+    jsString
+  );
+
   TJsonStringMode = (
     jsmDoubleQuoted,
     jsmSingleQuoted,
     jsmUnquoted
   );
 
-  PJsonState = ^TJsonState;
-
-  TJsonString = string;
-
   { TJsonReader }
 
   TJsonReader = class
   protected
-    FToken:      TJsonToken;
+    // === Parsing options ===
+    FFeatures:         TJsonFeatures;
 
+    // === Input ===
+    FStream:           TStream;
+    FBuf:              array[0..1023] of TJsonChar;
+    // Length of FBuf
+    FLen:              integer;
+    // Position within FBuf
+    FPos:              integer;
+    // Offset of FBuf within the stream (only used for error information)
+    FOffset:           SizeInt;
+
+    // === Tokenizer ===
+    // Current token type (at FBuf[FPos])
+    FToken:            TJsonToken;
+
+    // == Stack machine ===
+    FStack:            array of TJsonInternalState;
+    FState:            TJsonState;
+
+    // === Number parsing ===
     // FNumber contains the normalized decimal form of the number.
     // I.e. Skips any leading zeroes and contains no decimal point, and may be
     // followed by an exponent.
@@ -93,42 +113,41 @@ type
     // pass it to the runtime and assume it handles it correctly.
     //
     // https://www.exploringbinary.com/17-digits-gets-you-there-once-youve-found-your-way/
-    FNumber:     TJsonString;
-    FNumberErr:  Boolean;
+    FNumber:           TJsonString;
+    // True = number could be parsed but is technically not a valid JSON number
+    FNumberErr:        Boolean;
 
-    FStream:     TStream;
-    FBuf:        array[0..1023] of Char;
-    FLen:        integer;
-    FPos:        integer;
+    // === String parsing ===
     // Delimiter of the current string (double-quote, single-quote, or word boundary)
-    FStringMode: TJsonStringMode;
+    FStringMode:       TJsonStringMode;
     // If an error occurred during Str() or Key(), the part that has been read is temporarily
     // stored here between successive calls.
-    FSavedStr:   TJsonString;
-    FStrIgnoreError: boolean;
-
-    FStack:      array of TJsonInternalState;
-    FState:      TJsonState;
+    FSavedStr:         TJsonString;
+    // If Proceed was called after a string error: Tell string routines to ignore the error.
+    FStrIgnoreError:   boolean;
+    // Temporary storage for decoded escape sequences.
+    FEscapeSequence:   TJsonString;
 
     // Nesting depth of structures (lists + dicts), e.g. "[[" would be depth 2. This is different
     // from Length(FStack) because FStack contains internal nodes such as jsDictValue etc..
     // This is checked against MaxNestingDepth and an error is generated if the maximum nesting
     // depth is exceeded. The purpose of this is to guarantee an upper bound on memory consumption
     // that doesn't grow linearly with the input in the worst case.
-    FNestingDepth: integer;
-    FMaxNestingDepth: integer;
+    FNestingDepth:     integer;
+    FMaxNestingDepth:  integer;
 
+    // === Error recovery ===
     // Stack depth up until which we must pop after an error.
-    FPopUntil:   integer;
+    FPopUntil:         integer;
     // Stack depth up until which a skip was issued.
-    FSkipUntil:  integer;
+    FSkipUntil:        integer;
     // Whether current item should be skipped upon next call to Advance.
-    FSkip:       Boolean;
+    FSkip:             Boolean;
 
-    FLastError:  TJsonError;
+    // === Error information ===
+    FLastError:        TJsonError;
     FLastErrorMessage: TJsonString;
-
-    FFeatures: TJsonFeatures;
+    FLastErrorPosition:SizeInt;
 
     // Tokenizer
     procedure GetToken;
@@ -160,16 +179,15 @@ type
     function  StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
     function  StrInternal(out S: TJsonString): Boolean;
 
-    //
-    function  AcceptValue: boolean;
-    function  AcceptKey: boolean;
-
-    // Internal functions
+    // Other internal functions
     function  InternalAdvance: TJsonState;
     function  InternalProceed: Boolean;
-    procedure InvalidOrUnexpectedToken(const Msg: TJsonString);
+    procedure InvalidOrUnexpectedToken(const Msg: TJsonString);  
+    function  AcceptValue: boolean;
+    function  AcceptKey: boolean;
+    procedure SetLastError(Error: TJsonError; const Msg: string);
   public
-    constructor Create(Stream: TStream; Features: TJsonFeatures=[]; MaxNestingDepth: integer =MaxInt);
+    constructor Create(Stream: TStream; Features: TJsonFeatures=[]; MaxNestingDepth: integer=MaxInt);
 
     // === General traversal ===
 
@@ -287,6 +305,9 @@ type
 
     // Return error message for last error.
     function  LastErrorMessage: TJsonString;
+
+    // Location of the last error
+    function  LastErrorPosition: SizeInt;
   end;
 
   { TJsonWriter }
@@ -298,15 +319,18 @@ type
 
   TJsonWriter = class
   protected
-    FStream: TStream;
-    FNeedComma: Boolean;
-    FNeedColon: Boolean;
-    FStructEmpty: Boolean;
+    FStream:        TStream;
+    FNeedComma:     Boolean;
+    FNeedColon:     Boolean;
+    FStructEmpty:   Boolean;
     FWritingString: Boolean;
-    FLevel: integer;
-    FFeatures: TJsonFeatures;
+    FLevel:         integer;
+    FFeatures:      TJsonFeatures;
 
-    FStack: array of TJsonInternalState;
+    FPrettyPrint:   Boolean;
+    FIndentation:   string;
+
+    FStack:         array of TJsonInternalState;
 
     procedure WriteSeparator(Indent: Boolean = true);
     procedure Write(const S: TJsonString);
@@ -322,15 +346,22 @@ type
     procedure StackPush(State: TJsonInternalState);
     function  StackPop: TJsonInternalState;
   public
-    constructor Create(Stream: TStream; Features: TJsonFeatures=[]);
+    constructor Create(Stream: TStream; Features: TJsonFeatures=[]; PrettyPrint: Boolean=false; const Indentation: string='  ');
 
     procedure Key(const K: TJsonString);
+    // Streaming equivalent of the Key() method. See StrBuf().
     procedure KeyBuf(const Buf; BufSize: SizeInt);
-    procedure Str(const S: TJsonString);
+    procedure Str(const S: TJsonString);          
+    // Streaming equivalent of the Str() method. To indicate the end of the string, call once with BufSize set to 0.
+    // Note: To write an empty string, you have to call the method twice:
+    //   StrBuf(..., 0); // Write 0 bytes
+    //   StrBuf(..., 0); // Signal end of string
     procedure StrBuf(const Buf; BufSize: SizeInt);
     procedure Number(Num: integer); overload;
     procedure Number(Num: int64); overload;
     procedure Number(Num: uint64); overload;
+    // Write number if hexadecimal format, if possible. This required jfJson5 to be included in Features. If jfJson5
+    // is not included in Features, a decimal number will be written, instead.
     procedure NumberHex(Num: uint64); overload;
     procedure Number(Num: double); overload;
     procedure Bool(Bool: Boolean);
@@ -346,21 +377,25 @@ implementation
 uses
   math;
 
+type
+  TJsonCharArray = array[0..High(SizeInt) div sizeof(TJsonChar) - 1] of TJsonChar;
+
 { TJsonReader }
 
 constructor TJsonReader.Create(Stream: TStream; Features: TJsonFeatures;
   MaxNestingDepth: integer);
 begin
-  FStream    := Stream;
-  FLen       := 0;
-  FPos       := 0;      
-  FPopUntil  := -1;
-  FSkipUntil := MaxInt;
-  FSkip      := false;
-  FSavedStr  := '';
-  FFeatures  := Features;
-  FLastError := jeNoError;
-  FMaxNestingDepth := MaxNestingDepth;
+  FStream            := Stream;
+  FLen               := 0;
+  FPos               := 0;
+  FPopUntil          := -1;
+  FSkipUntil         := MaxInt;
+  FSkip              := false;
+  FSavedStr          := '';
+  FFeatures          := Features;
+  FLastError         := jeNoError;
+  FLastErrorPosition := 0;
+  FMaxNestingDepth   := MaxNestingDepth;
   StackPush(jsInitial);
   Advance;
 end;
@@ -373,6 +408,7 @@ begin
   begin
     assert(FPos <= FLen);
     Move(FBuf[FPos], FBuf[0], FLen - FPos);
+    Inc(FOffset, FPos);
     FLen := FLen - FPos;         
     FPos := 0;
 
@@ -480,7 +516,6 @@ end;
 
 function TJsonReader.MatchString(const Str: TJsonString): Boolean;
 var
-  n: SizeInt;
   i: integer;
 begin
   Result := false;
@@ -506,7 +541,7 @@ const
 
 procedure TJsonReader.ParseNumber;
 var
-  Buf: array[0..768-1 + 1 { sign }] of char;
+  Buf: array[0..768-1 + 1 { sign }] of TJsonChar;
   i, n:   integer;
   Exponent:  integer;
   LeadingZeroes: integer;
@@ -538,7 +573,7 @@ label
     j: integer;
   begin
     Result := 0;
-    while (FLen >= 0) and (FBuf[FPos] in Digits) do
+    while (FLen >{=} 0) and (FBuf[FPos] in Digits) do
     begin
       for j := FPos to FLen do
       begin
@@ -573,8 +608,7 @@ begin
     if (ReadDigits(['0'..'9', 'a'..'f', 'A'..'F']) <= 0) then
     begin
       FNumberErr := true;
-      FLastError := jeInvalidNumber;
-      FLastErrorMessage := 'Invalid hexadecimal number.';
+      SetLastError(jeInvalidNumber, 'Invalid hexadecimal number.');
     end;
     goto Finalize;
   end;
@@ -595,8 +629,7 @@ begin
     if (FBuf[FPos] = '+') and not (jfJson5 in FFeatures) then
     begin
       FNumberErr := true;  
-      FLastError := jeInvalidNumber;
-      FLastErrorMessage := 'Number has leading `+`.';
+      SetLastError(jeInvalidNumber, 'Number has leading `+`.');
     end;
 
     if (FBuf[FPos] = '-') then
@@ -629,8 +662,7 @@ begin
      (LeadingZeroes > 0) and (FLen >= 0) and (FBuf[FPos] in ['0'..'9']) then
   begin
     FNumberErr := true;   
-    FLastError := jeInvalidNumber;
-    FLastErrorMessage := 'Number has leading zeroes.';
+    SetLastError(jeInvalidNumber, 'Number has leading zeroes.');
   end;
 
   if (LeadingZeroes > 0) and not ((FLen >= 0) and (FBuf[FPos] in ['0'..'9'])) then
@@ -644,8 +676,7 @@ begin
       if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
       begin
         FNumberErr := true;  
-        FLastError := jeInvalidNumber;
-        FLastErrorMessage := 'Expected digit after decimal point.';
+        SetLastError(jeInvalidNumber, 'Expected digit after decimal point.');
       end;
       Exponent := -SkipZero;
       Exponent := Exponent - ReadDigits;
@@ -670,8 +701,7 @@ begin
       if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
       begin
         FNumberErr := true; 
-        FLastError := jeInvalidNumber;
-        FLastErrorMessage := 'Expected digit after decimal point.';
+        SetLastError(jeInvalidNumber, 'Expected digit after decimal point.');
       end;
       Exponent := -ReadDigits;
     end;
@@ -723,8 +753,7 @@ Finalize:
     StackPop; // Was never a number to begin with
     StackPush(jsError);
     FState := jnError;
-    FLastError := jeInvalidToken;
-    FLastErrorMessage := 'Invalid token.';
+    SetLastError(jeInvalidToken, 'Invalid token.');
 
     // Skip rest of token
     repeat
@@ -994,8 +1023,7 @@ begin
           else
           begin
             FState := jnError;
-            FLastError := jeUnexpectedListEnd;
-            FLastErrorMessage := 'Trailing comma before end of list.';
+            SetLastError(jeUnexpectedListEnd, 'Trailing comma before end of list.');
             StackPush(jsError);
           end;
         end
@@ -1044,8 +1072,7 @@ begin
           else
           begin
             FState := jnError;
-            FLastError := jeUnexpectedDictEnd;    
-            FLastErrorMessage := 'Trailing comma before end of dict.';
+            SetLastError(jeUnexpectedDictEnd, 'Trailing comma before end of dict.');
             StackPush(jsError);
           end;
         end
@@ -1121,25 +1148,13 @@ procedure TJsonReader.InvalidOrUnexpectedToken(const Msg: TJsonString);
 begin
   case FToken of
     jtUnknown:
-    begin
-      FLastError := jeInvalidToken;
-      FLastErrorMessage := Format('Unexpected character `%s`. %s', [FBuf[FPos], Msg]);
-    end;
+      SetLastError(jeInvalidToken, Format('Unexpected character `%s`. %s', [FBuf[FPos], Msg]));
     jtEOF:
-    begin
-      FLastError := jeUnexpectedEOF;
-      FLastErrorMessage := Format('Unexpected end-of-file. %s', [Msg]);
-    end;
+      SetLastError(jeUnexpectedEOF, Format('Unexpected end-of-file. %s', [Msg]));
     jtNumber:
-    begin    
-      FLastError := jeUnexpectedToken;
-      FLastErrorMessage := Format('Unexpected numeral. %s', [Msg]);
-    end
+      SetLastError(jeUnexpectedToken, Format('Unexpected numeral. %s', [Msg]));
     else
-    begin
-      FLastError := jeUnexpectedToken;
-      FLastErrorMessage := Format('Unexpected `%s`. %s', [FBuf[FPos], Msg]);
-    end;
+      SetLastError(jeUnexpectedToken, Format('Unexpected `%s`. %s', [FBuf[FPos], Msg]));
   end;
 end;
 
@@ -1352,15 +1367,21 @@ begin
   Result := FLastErrorMessage;
 end;
 
+function TJsonReader.LastErrorPosition: SizeInt;
+begin
+  Result := FLastErrorPosition;
+end;
+
 function TJsonReader.StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
 var
   i0, i1, o0, o1: SizeInt;
   l: SizeInt;
   StopChars: set of char;
-  c: Char;
-  esc: TJsonString;
   uc: Cardinal;
-  k: integer;
+  k, n: integer;
+  _Buf: TJsonCharArray absolute Buf;
+label
+  return;
 
   function HexDigit(c: Char): integer;
   begin
@@ -1388,7 +1409,7 @@ begin
   if not (jfJson5 in FFeatures) then
     StopChars := StopChars + [#0..#31];
 
-  FillByte(Buf, BufSize, 0);
+  FillByte(_Buf[0], BufSize, 0);
 
   if StackTop = jsError then
   begin
@@ -1398,65 +1419,91 @@ begin
 
   while true do
   begin
+    // There may be some remaining buffered chars from an escape sequence that need to be emitted
+    // before we can advance.
+    if FEscapeSequence <> '' then
+    begin
+      n := Length(FEscapeSequence);
+      if n > BufSize - o1 then
+        n := BufSize - o1;
+
+      Move(FEscapeSequence[1], _Buf[o1], n);
+      if Length(FEscapeSequence) > n then
+        Move(FEscapeSequence[n + 1], FEscapeSequence[1], length(FEscapeSequence) - n);
+      SetLength(FEscapeSequence, length(FEscapeSequence) - n);
+      Inc(o1, n);
+    end;
+
     i0 := FPos;
     i1 := i0;
     o0 := o1;
     l  := FLen;
 
+    // Hopefully, most characters will be regular characters, not escape sequences
+    // or string delimiters. We try to copy as much data as we can using a simple
+    // block move until we encounter a character that needs special processing.
     while (i1 < l) and (o1 < BufSize) and not (FBuf[i1] in StopChars) do
     begin
       Inc(i1);
       Inc(o1);
     end;
-
     FPos := i1;
+    Move(FBuf[i0], _Buf[o0], o1 - o0);
 
-    Move(FBuf[i0], PChar(SizeUInt(@Buf) + o0)^, o1 - o0);
-
+    // Output buffer is full, exit
     if o1 >= BufSize then
       break;
 
+    // EOF Before string end?
     if FLen = 0 then
     begin
-      // EOF Before string end
       if not FStrIgnoreError then
       begin
         FState := jnError;
         StackPush(jsError);
-        FLastError := jeUnexpectedEOF;
-        FLastErrorMessage := 'Unexpected end-of-file.';
+        SetLastError(jeUnexpectedEOF, 'Unexpected end-of-file.');
       end;
 
       FStrIgnoreError := false;
       break;
     end;
 
+    // Used up the input buffer? Refill and continue
     if FPos >= FLen then
     begin
       RefillBuffer;
       continue;
     end;
 
+    // When we get here, at the current position we have either
+    // - the end of the string
+    // - an escape sequence (valid or invalid)
+    // - an invalid character (ASCII < 31)
+
     if FBuf[FPos] = '\' then
     begin
-      // Maximum length escape sequence = \u1234 = need 6 characters lookahead
-      RefillBuffer(6);
+      // We have an escape sequence
 
+      // Maximum length of an escape sequence is 6 (\u1234), so we need 6 characters lookahead
+      RefillBuffer(6);
+                          
+      // EOF after the '\'?
       if FPos + 1 >= FLen then
       begin
-        // EOF Before string end
         if not FStrIgnoreError then
         begin
           FState := jnError;       
           StackPush(jsError);
-          FLastError := jeUnexpectedEOF;
-          FLastErrorMessage := 'Unexpected end-of-file.';
+          SetLastError(jeUnexpectedEOF, 'Unexpected end-of-file.');
         end;
 
         FStrIgnoreError := false;
         break;
-      end;
+      end;      
 
+      assert(FEscapeSequence = '');
+
+      // \u1234 escape sequence
       if FBuf[FPos + 1] = 'u' then
       begin
         uc := 0;
@@ -1474,8 +1521,7 @@ begin
           begin
             FState := jnError;
             StackPush(jsError);
-            FLastError := jeInvalidEscapeSequence;
-            FLastErrorMessage := 'Invalid escape sequence in string. Expected four hex digits.';
+            SetLastError(jeInvalidEscapeSequence, 'Invalid escape sequence in string. Expected four hex digits.');
             break;
           end;
 
@@ -1485,80 +1531,71 @@ begin
         if k = 0 then
           uc := $fffe;
 
-        esc := TJsonString(UnicodeChar(uc));
-
-        if o1 + Length(esc) > BufSize then
-          break;
-
-        Move(esc[1], PChar(SizeUInt(@Buf) + o1)^, Length(esc));
-
-        Inc(o1, Length(esc));
+        FEscapeSequence := TJsonString(UnicodeChar(uc));
         Inc(FPos, 2 + k);
       end
+      // Other escape sequence
       else
       begin
+        // Number of consumed input characters (usually 2)
+        n := 2;
         case FBuf[FPos + 1] of
-          '"': c := '"';
-          '\': c := '\';
-          '/': c := '/';
-          'b': c := #08;
-          'f': c := #12;
-          'n': c := #10;
-          'r': c := #13;
-          't': c := #09;
+          '"': FEscapeSequence := '"';
+          '\': FEscapeSequence := '\';
+          '/': FEscapeSequence := '/';
+          'b': FEscapeSequence := #08;
+          'f': FEscapeSequence := #12;
+          'n': FEscapeSequence := #10;
+          'r': FEscapeSequence := #13;
+          't': FEscapeSequence := #09;
           else
           begin
             // JSON5 allows escaping of newline characters (stupid)
             if jfJson5 in FFeatures then
             begin
               if (FBuf[FPos + 1] = #13) and (FBuf[FPos + 2] = #10) then
-              begin           
-                PChar(SizeUInt(@Buf) + o1)^ := c;
-                Move(#13#10, PChar(SizeUInt(@Buf) + o1)^, 2);
-                inc(o1, 2);
-                Inc(FPos, 3);
-                continue;
+              begin
+                FEscapeSequence := #13#10;
+                n := 3;
               end
               else if (FBuf[FPos + 1] = #10) then
-              begin    
-                PChar(SizeUInt(@Buf) + o1)^ := #10; 
-                inc(o1);
-                Inc(FPos, 2);
-                continue;
+              begin
+                FEscapeSequence := #10;
+                n := 2;
               end;
-            end;
-
-            if not FStrIgnoreError then
+            end
+            else if not FStrIgnoreError then
             begin
-              FState := jnError;
-              FLastError := jeInvalidEscapeSequence;
-              FLastErrorMessage := 'Invalid escape sequence in string.';
+              FState := jnError;         
+              StackPush(jsError);
+              SetLastError(jeInvalidEscapeSequence, 'Invalid escape sequence in string.');
               break;
             end
             else
-              c := FBuf[FPos + 1];
-            FStrIgnoreError := false;
+            begin
+              FEscapeSequence := Copy(FBuf, FPos + 1, 2);
+              FStrIgnoreError := false;
+              n := 2;
+            end;
           end;
         end;
-        Inc(FPos, 2);
-        PChar(SizeUInt(@Buf) + o1)^ := c;
-        inc(o1);
+
+        Inc(FPos, n);
       end;
     end
-    else if {(FBuf[FPos] in [#13, #10]) or ((FBuf[FPos] in [#0..#31]) and not (jfJson5 in FFeatures))}(FBuf[FPos] in [#0..#31]) and (FStringMode <> jsmUnquoted) then
+    else if (FBuf[FPos] in [#0..#31]) and (FStringMode <> jsmUnquoted) then
     begin
       // Invalid character
       if not FStrIgnoreError then
       begin
         FState := jnError;     
         StackPush(jsError);
-        FLastError := jeInvalidEscapeSequence;
-        FLastErrorMessage := 'Invalid character in string. Codepoints below 32 must be encoded using escape sequence (\u....).';
+        SetLastError(jeInvalidEscapeSequence, 'Invalid character in string. Codepoints below 32 must be encoded using escape sequence (\u....).');
         break;
       end
       else
       begin
-        PChar(SizeUInt(@Buf) + o1)^ := FBuf[FPos];
+        _Buf[o1] := FBuf[FPos];
         Inc(FPos);
         inc(o1);
       end;    
@@ -1575,6 +1612,8 @@ begin
       break;
     end;
   end;
+
+return:
 
   Result := o1;
 
@@ -1635,8 +1674,7 @@ begin
         FState := jnError;
         FPopUntil := 0;
         StackPush(jsError);
-        FLastError := jeNestingTooDeep;
-        FLastErrorMessage := Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]);
+        SetLastError(jeNestingTooDeep, Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]));
       end
       else
       begin
@@ -1654,8 +1692,7 @@ begin
         FState := jnError;
         FPopUntil := 0;
         StackPush(jsError);  
-        FLastError := jeNestingTooDeep; 
-        FLastErrorMessage := Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]);
+        SetLastError(jeNestingTooDeep, Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]));
       end
       else
       begin
@@ -1752,6 +1789,13 @@ begin
       end
     end;
   end;
+end;
+
+procedure TJsonReader.SetLastError(Error: TJsonError; const Msg: string);
+begin
+  FLastError         := Error;
+  FLastErrorMessage  := Msg;
+  FLastErrorPosition := FOffset + FPos;
 end;
 
 function TJsonReader.Key(out K: TJsonString): Boolean;
@@ -1956,13 +2000,16 @@ end;
 
 { TJsonWriter }
 
-constructor TJsonWriter.Create(Stream: TStream; Features: TJsonFeatures);
+constructor TJsonWriter.Create(Stream: TStream; Features: TJsonFeatures;
+  PrettyPrint: Boolean; const Indentation: string);
 begin
-  FNeedComma := false;
-  FNeedColon := false;
+  FNeedComma     := false;
+  FNeedColon     := false;
   FWritingString := false;
-  FStream := Stream;
-  FFeatures := Features;
+  FStream        := Stream;
+  FFeatures      := Features;
+  FPrettyPrint   := PrettyPrint;
+  FIndentation   := Indentation;
   StackPush(jsInitial);
 end;
 
@@ -1971,15 +2018,23 @@ var
   i: integer;
 begin
   if FNeedColon then
-    Write(': ');
+    if FPrettyPrint then
+      Write(': ')
+    else
+      Write(':');
+
   if FNeedComma then
     Write(',');
-  if Indent and (FNeedComma or FStructEmpty) then
-    Write(LineEnding);
-  if Indent and not FNeedColon then
+
+  if FPrettyPrint then
   begin
-    for i := 0 to FLevel - 1 do
-      Write('  ');
+    if Indent and (FNeedComma or FStructEmpty) then
+      Write(LineEnding);
+    if Indent and not FNeedColon then
+    begin
+      for i := 0 to FLevel - 1 do
+        Write({'  '}FIndentation);
+    end;
   end;
   FNeedColon := false;
   FStructEmpty := false;
@@ -1995,16 +2050,17 @@ procedure TJsonWriter.WriteBuf(const Buf; BufSize: SizeInt);
 var
   i: SizeInt;
   Written: LongInt;
-  Ptr: PByte;
+  _Buf: TJsonCharArray absolute Buf;
+  //Ptr: PByte;
 begin
   i := 0;
-  Ptr := @Buf;
+  //Ptr := @Buf;
   while i < BufSize do
   begin
-    Written := FStream.Write(Ptr^, BufSize - i);
+    Written := FStream.Write(_Buf[i], BufSize - i);
     if Written <= 0 then
       raise EStreamError.CreateFmt('Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]);
-    inc(Ptr, Written);
+    //inc(Ptr, Written);
     Inc(i, Written);
   end;
 end;
@@ -2017,9 +2073,10 @@ const
   HexDigits: array[0..15] of Char =
     ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
 var
-  Escaped: array[0 .. EntitySize * ChunkSize - 1] of Char;
+  Escaped: array[0 .. EntitySize * ChunkSize - 1] of TJsonChar;
   i, j, o, n: SizeInt;
-  c: PChar;
+  //c: PChar;
+  _Buf: TJsonCharArray absolute Buf;
 begin
   if not FWritingString then
   begin
@@ -2043,7 +2100,7 @@ begin
   end;
 
   i := 0;
-  c := PChar(@Buf);
+  //c := PChar(@Buf);
 
   while i < BufSize do
   begin
@@ -2054,18 +2111,18 @@ begin
     o := 0;
     for j := 0 to n - 1 do
     begin
-      if c^ in ['\', '"'] then
+      if _Buf[i] in ['\', '"'] then
       begin
         Escaped[o] := '\';
-        Escaped[o+1] := c^;
+        Escaped[o+1] := _Buf[i];//c^;
         Inc(o, 2);  
         Inc(i);
-        Inc(c);
+        //Inc(c);
       end
-      else if (c^ in [#10, #13]) or ((c^ in [#0..#31]) and not (jfJson5 in FFeatures)) then
+      else if ({c^}_Buf[i] in [#10, #13]) or (({c^}_Buf[i] in [#0..#31]) and not (jfJson5 in FFeatures)) then
       begin
         Escaped[o] := '\';
-        case c^ of
+        case {c^}_Buf[i] of
           #08: begin Escaped[o+1] := 'b'; Inc(o, 2); end;
           #12: begin Escaped[o+1] := 'f'; Inc(o, 2); end;
           #10: begin Escaped[o+1] := 'n'; Inc(o, 2); end;
@@ -2076,24 +2133,24 @@ begin
             Escaped[o+1] := 'u';
             Escaped[o+2] := '0';
             Escaped[o+3] := '0';
-            Escaped[o+4] :=  HexDigits[Ord(c^) shr 4];
-            Escaped[o+5] :=  HexDigits[Ord(c^) and $f];
+            Escaped[o+4] :=  HexDigits[Ord({c^}_Buf[i]) shr 4];
+            Escaped[o+5] :=  HexDigits[Ord({c^}_Buf[i]) and $f];
             Inc(o, 6);
           end;
         end;   
         Inc(i);
-        Inc(c);
+        //Inc(c);
       end
       else
       begin
-        Escaped[o] := c^;
+        Escaped[o] := {c^}_Buf[i];
         Inc(o);
         Inc(i);
-        Inc(c);
+        //Inc(c);
       end;
     end;
 
-    WriteBuf(Escaped, SizeOf(Char) * o);
+    WriteBuf(Escaped, SizeOf(Escaped[0]) * o);
   end;
 end;
 

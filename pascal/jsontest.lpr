@@ -274,7 +274,7 @@ begin
   end;
 end;
 
-// Practical usage example
+// More practical example
 procedure Test4;
 var
   Stream: TStream;
@@ -688,7 +688,7 @@ begin
   end;
 end;
 
-// Test booleans
+// Test booleans in dict
 procedure Test9;
 var
   Stream: TStream;
@@ -804,6 +804,73 @@ begin
   end;
 end;
 
+// Test escape sequences
+procedure Test11;
+var
+  Stream: TStream;
+  Reader: TJsonReader;
+
+  str: string;
+const
+  sample = '"Hello \u0041 World\tTab\r\nNewLine"';
+  expected = 'Hello A World'#9'Tab'#13#10'NewLine';
+begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(sample);
+    Reader := TJsonReader.Create(Stream);
+
+    if not Reader.Str(str) then
+      assert(false);
+
+    assert(str = expected);
+
+    if Reader.Advance <> jnEOF then
+      assert(false);
+  finally
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
+// Test erroneous escape sequences
+procedure Test12;
+var
+  Stream: TStream;
+  Reader: TJsonReader;
+
+  str: string;
+const
+  sample = '"a \u41 b\x"';
+  expected = 'a A b\x';
+begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(sample);
+    Reader := TJsonReader.Create(Stream);
+
+    if Reader.Str(str) then
+      assert(false);
+    Reader.Proceed;
+    if Reader.Str(str) then
+      assert(false);
+    Reader.Proceed;
+
+    if not Reader.Str(str) then
+      assert(false);
+
+    assert(str = expected);
+
+    if Reader.Advance <> jnEOF then
+      assert(false);
+  finally
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
 begin
   Test1;
   Test2;
@@ -815,5 +882,7 @@ begin
   Test8;
   Test9;
   Test10;
+  Test11;
+  Test12;
 end.
 

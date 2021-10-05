@@ -212,7 +212,7 @@ begin
 end;
 
 begin
-  {$if 0}
+  {$if 1}
   AbortOnFirstError := false;
   Features := [jfJSON5];
   OutStream := TIOStream.Create(iosOutPut);
