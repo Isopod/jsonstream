@@ -123,6 +123,8 @@ type
     // If an error occurred during Str() or Key(), the part that has been read is temporarily
     // stored here between successive calls.
     FSavedStr:         TJsonString;
+    // True if we reached the end of the string
+    FStringEnd:        Boolean;
     // If Proceed was called after a string error: Tell string routines to ignore the error.
     FStrIgnoreError:   boolean;
     // Temporary storage for decoded escape sequences.
@@ -375,7 +377,7 @@ type
 implementation
 
 uses
-  math;
+  math, cwstring;
 
 type
   TJsonCharArray = array[0..High(SizeInt) div sizeof(TJsonChar) - 1] of TJsonChar;
@@ -1206,6 +1208,7 @@ begin
     end
     else
       FStringMode := jsmUnquoted;
+    FStringEnd := false;
     FSkip := true;
     Result := true;
     exit;
@@ -1411,7 +1414,7 @@ begin
 
   FillByte(_Buf[0], BufSize, 0);
 
-  if StackTop = jsError then
+  if (BufSize <= 0) or (StackTop = jsError) or FStringEnd then
   begin
     Result := -1;
     exit;
@@ -1465,6 +1468,7 @@ begin
       end;
 
       FStrIgnoreError := false;
+      FStringMode := jsmUnquoted; // Hack so we don't increment FPos
       break;
     end;
 
@@ -1620,7 +1624,8 @@ return:
   FStrIgnoreError := false;
 
   if (Result = 0) and (StackTop <> jsError) then
-  begin
+  begin         
+    FStringEnd := true;
     if FStringMode <> jsmUnquoted then
       Inc(FPos);
     Reduce;
@@ -1736,6 +1741,7 @@ begin
       FState := jnString;
       StackPush(jsString);
       FStringMode := jsmDoubleQuoted;
+      FStringEnd := false;
       Inc(FPos);       
       Result := true;
     end;
@@ -1746,6 +1752,7 @@ begin
         FState := jnString;
         StackPush(jsString);
         FStringMode := jsmSingleQuoted;
+        FStringEnd := false;
         Inc(FPos);
         Result := true;
       end
@@ -1762,6 +1769,7 @@ begin
       FState := jnKey;
       StackPush(jsDictKey);
       FStringMode := jsmDoubleQuoted;
+      FStringEnd := false;
       Inc(FPos);
       Result := true;
     end;
@@ -1772,6 +1780,7 @@ begin
         FState := jnKey;
         StackPush(jsDictKey);
         FStringMode := jsmSingleQuoted;
+        FStringEnd := false;
         Inc(FPos);
         Result := true;
       end
@@ -1785,6 +1794,7 @@ begin
         FState := jnKey;
         StackPush(jsDictKey);
         FStringMode := jsmUnquoted;
+        FStringEnd := false;
         Result := true;
       end
     end;

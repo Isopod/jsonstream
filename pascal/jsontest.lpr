@@ -871,7 +871,248 @@ begin
   end;
 end;
 
+// Test StrBuf
+procedure Test13;
+var
+  Stream: TStream;
+  Reader: TJsonReader;
+  buf: string;
+  n: SizeInt;
+const
+  sample = '["Hello World", "Hello \u0041 World", "\u0041\u0042\u0043\u0044\r\n\u0045\u0046", "", "Hell\u00f6 W\u00f6rld"]';
 begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(sample);
+    Reader := TJsonReader.Create(Stream);
+
+    if not Reader.List then
+      assert(false);
+
+    if Reader.Advance <> jnString then
+      assert(false);
+
+    buf := '';
+    SetLength(buf, 5);
+
+    // "Hello World"
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> ' Worl') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 1) or (Copy(buf, 1, n) <> 'd') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if Reader.Advance <> jnString then
+      assert(false);
+
+    // Hello A World
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> ' A Wo') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if Reader.Advance <> jnString then
+      assert(false);
+
+    // ABCD\n\rEF
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'ABCD'#13) then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 3) or (Copy(buf, 1, n) <> #10'EF') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if Reader.Advance <> jnString then
+      assert(false);
+
+    // ""
+    n := Reader.StrBuf(buf[1], 5);
+    if n <> 0 then
+      assert(false);
+    {n := Reader.StrBuf(buf[1], 5);
+    if n <> 0 then
+      assert(false);}
+
+    if Reader.Advance <> jnString then
+      assert(false);
+
+    // Hellö Wörld
+    n := Reader.StrBuf(buf[1], 5);
+    assert(Ord(buf[5]) = $c3);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'Hell'#$c3) then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> #$b6' W'#$c3#$b6) then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
+      assert(false);
+    n := Reader.StrBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if Reader.Advance <> jnListEnd then
+      assert(false);
+
+  finally
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
+// Test KeyBuf
+procedure Test14;
+var
+  Stream: TStream;
+  Reader: TJsonReader;
+  buf: string;
+  n: SizeInt;
+  int: integer;
+const
+  sample = '{"Hello World": 1, "Hello \u0041 World": 2, "\u0041\u0042\u0043\u0044\r\n\u0045\u0046":3, "":4, "Hell\u00f6 W\u00f6rld":5}';
+begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(sample);
+    Reader := TJsonReader.Create(Stream);
+
+    if not Reader.Dict then
+      assert(false);
+
+    if Reader.Advance <> jnKey then
+      assert(false);
+
+    buf := '';
+    SetLength(buf, 5);
+
+    // "Hello World"
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> ' Worl') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 1) or (Copy(buf, 1, n) <> 'd') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if not Reader.Number(int) then
+      assert(false);
+
+    assert(int = 1);
+
+    if Reader.Advance <> jnKey then
+      assert(false);
+
+    // Hello A World
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> ' A Wo') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if not Reader.Number(int) then
+      assert(false);
+
+    assert(int = 2);
+
+    if Reader.Advance <> jnKey then
+      assert(false);
+
+    // ABCD\n\rEF
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'ABCD'#13) then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 3) or (Copy(buf, 1, n) <> #10'EF') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if not Reader.Number(int) then
+      assert(false);
+
+    assert(int = 3);
+
+    if Reader.Advance <> jnKey then
+      assert(false);
+
+    // ""
+    n := Reader.KeyBuf(buf[1], 5);
+    if n <> 0 then
+      assert(false);
+
+    if not Reader.Number(int) then
+      assert(false);
+
+    assert(int = 4);
+
+    if Reader.Advance <> jnKey then
+      assert(false);
+
+    // Hellö Wörld
+    n := Reader.KeyBuf(buf[1], 5);
+    assert(Ord(buf[5]) = $c3);
+    if (n <> 5) or (Copy(buf, 1, n) <> 'Hell'#$c3) then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 5) or (Copy(buf, 1, n) <> #$b6' W'#$c3#$b6) then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
+      assert(false);
+    n := Reader.KeyBuf(buf[1], 5);
+    if (n <> 0) then
+      assert(false);
+
+    if not Reader.Number(int) then
+      assert(false);
+
+    assert(int = 5);
+
+    if Reader.Advance <> jnDictEnd then
+      assert(false);
+
+  finally
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
+begin
+  SetMultiByteConversionCodePage(CP_UTF8);
+
   Test1;
   Test2;
   Test3;
@@ -884,5 +1125,7 @@ begin
   Test10;
   Test11;
   Test12;
+  Test13;
+  Test14;
 end.
 
