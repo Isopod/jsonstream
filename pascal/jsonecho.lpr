@@ -16,7 +16,6 @@ var
   Writer: TJsonWriter;
   i: integer;
 
-//const
   AbortOnFirstError: Boolean = true;
   NestingDepth: integer = MaxInt;
   Features: TJsonFeatures;

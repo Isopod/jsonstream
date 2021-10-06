@@ -3,8 +3,14 @@ program jsontest;
 uses
   sysutils, classes, jsonstream;
 
+procedure AssertTrue(Cond: Boolean; const msg:string=''); inline;
+begin
+  if Cond then
+    raise EAssertionFailed.Create(msg);
+end;
+
 // Test basic list
-procedure Test1;
+procedure TestList;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -21,24 +27,18 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     for i := 1 to 3 do
     begin
       Reader.Advance;
-      if not Reader.Number(num) then
-        assert(false);
+      AssertTrue(Reader.Number(num));
       WriteLn(num);
       assert(num = i);
     end;
 
-    if Reader.Advance <> jnListEnd then
-      assert(false);
-
-    if Reader.Advance <> jnEOF then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -46,7 +46,7 @@ begin
 end;
 
 // Test basic dict
-procedure Test2;
+procedure TestDict;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -65,26 +65,20 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     for i := 1 to 3 do
     begin
       Reader.Advance;
-      if not Reader.Key(str) then
-        assert(false);
-      assert(str = keys[i]);
-      if not Reader.Number(num) then
-        assert(false);
+      AssertTrue(Reader.Key(str));
+      AssertTrue(str = keys[i]);
+      AssertTrue(Reader.Number(num));
       WriteLn(str, '=', num);
-      assert(num = i);
+      AssertTrue(num = i);
     end;
 
-    if Reader.Advance <> jnDictEnd then
-      assert(false);
-
-    if Reader.Advance <> jnEOF then
-      assert(false);
+    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jnEOF);
 
   finally
     FreeAndNil(Stream);
@@ -93,7 +87,7 @@ begin
 end;
 
 // Test complex mixture of dicts and lists
-procedure Test3;
+procedure TestDictsListsMix;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -119,154 +113,109 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.Dict then
-      assert(false);
-
-    Reader.Advance;
-    if not Reader.Key(str) then
-      assert(false);
-    assert(str = 'abc');
-
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     Reader.Advance;
 
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'abc');
+
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.Key(str) then
-      assert(false);
-
-    assert(str = 'nest');
-
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     Reader.Advance;
 
-    if not Reader.Key(str) then
-      assert(false);
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'nest');
 
-    assert(str = 'nest2');
+    AssertTrue(Reader.Dict);
 
-    if not Reader.List then
-      assert(false);
+    Reader.Advance;
+
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'nest2');
+
+    AssertTrue(Reader.List);
 
     for i := 1 to 3 do
     begin
       Reader.Advance;
-      if not Reader.Number(num) then
-        assert(false);
-      assert(num = i);
+      AssertTrue(Reader.Number(num));
+      AssertTrue(num = i);
     end;
 
-    if Reader.Advance <> jnListEnd then
-      assert(false);
-
-    if Reader.Advance <> jnDictEnd then
-      assert(false);
-
-    if Reader.Advance <> jnDictEnd then
-      assert(false);
-
-    if Reader.Advance <> jnListEnd then
-      assert(false);
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jnListEnd);
 
     Reader.Advance;
 
-    if not Reader.Key(str) then
-      assert(false);
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'def');
 
-    assert(str = 'def');
-
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
-
-    assert(num = 1);
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 1);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 2);
 
-    assert(num = 2);
-
-    if Reader.Advance <> jnListEnd then
-      assert(false);
+    AssertTrue(Reader.Advance = jnListEnd);
 
     Reader.Advance;
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 4);
 
-    assert(num = 4);
-
-    if Reader.Advance <> jnListEnd then
-      assert(false);
+    AssertTrue(Reader.Advance = jnListEnd);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
+    AssertTrue(Reader.Number(num));
 
     assert(num = 5);
 
-    if Reader.Advance <> jnListEnd then
-      assert(false);
+    AssertTrue(Reader.Advance = jnListEnd);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
-
-    assert(num = 6);
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 6);
 
     Reader.Advance;
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
+    AssertTrue(Reader.Number(num));
+    AssertTRue(num = 7);
 
-    assert(num = 7);
-
-    if Reader.Advance <> jnListEnd then
-      assert(false);
-
-    if Reader.Advance <> jnListEnd then
-      assert(false);
-
-    if Reader.Advance <> jnDictEnd then
-      assert(false);
-
-    if Reader.Advance <> jnEOF then
-      assert(false);
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jnEOF);
 
   finally
     FreeAndNil(Stream);
@@ -275,6 +224,7 @@ begin
 end;
 
 // More practical example
+(*
 procedure Test4;
 var
   Stream: TStream;
@@ -364,9 +314,10 @@ begin
     FreeAndNil(Reader);
   end;
 end;
+*)
 
 // Test error recovery
-procedure Test5;
+procedure TestErrorRecovery;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -383,131 +334,94 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     Reader.Advance;
 
-    if not Reader.Key(str) then
-      assert(false);
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'a');
 
-    assert(str = 'a');
-
-    if not Reader.Str(str) then
-      assert(false);
-
-    assert(str = 'b');
+    AssertTrue(Reader.Str(str));
+    AssertTrue(str = 'b');
 
     Reader.Advance;
 
-    if Reader.State <> jnDictEnd then
-      assert(false);
+    AssertTrue(Reader.State = jnDictEnd);
 
     Reader.Advance;
 
     // 1st error
 
-    if Reader.State <> jnError then
-      assert(false);
+    AssertTrue(Reader.State = jnError);
 
     Reader.Proceed;
     Reader.Advance;
 
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     Reader.Advance;
 
-    if not Reader.Key(str) then
-      assert(false);
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'c');
 
-    assert(str = 'c');
-
-    if not Reader.Str(str) then
-      assert(false);
-
-    assert(str = 'd');
+    AssertTrue(Reader.Str(str));
+    AssertTrue(str = 'd');
 
     Reader.Advance;
 
-    if not Reader.Key(str) then
-      assert(false);
-
-    assert(str = 'e');
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'e');
 
     // 2nd error
 
-    if Reader.State <> jnError then
-      assert(false);
+    AssertTrue(Reader.Error);
 
     Reader.Proceed;
 
-    if Reader.State <> jnNull then
-      assert(false);
+    AssertTrue(Reader.State = jnNull);
 
-    Reader.Advance;
-
-    if Reader.State <> jnDictEnd then
-      assert(false);
-
-    Reader.Advance;
+    AssertTrue(Reader.Advance = jnDictEnd);
 
     // 3rd error
 
-    if Reader.State <> jnError then
-      assert(false);
+    Reader.Advance;
+    AssertTrue(Reader.Error);
 
     Reader.Proceed;
     Reader.Advance;
 
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     Reader.Advance;
 
-    if not Reader.Key(str) then
-      assert(false);
+    AssertTrue(Reader.Key(str));
+    AssertTrue(str = 'f');
 
-    assert(str = 'f');
-
-    if not Reader.Str(str) then
-      assert(false);
-
-    assert(str = 'g');
-
-    Reader.Advance;
+    AssertTrue(Reader.Str(str));
+    AssertTrue(str = 'g');
 
     // 4th error
-    if Reader.State <> jnError then
-      assert(false);
+
+    Reader.Advance;
+    AssertTrue(Reader.Error);
 
     Reader.Proceed;
-    Reader.Advance;
 
-    if Reader.State <> jnDictEnd then
-      assert(false);
-
-    Reader.Advance;
-
-    if Reader.State <> jnListEnd then
-      assert(false);
-
-    Reader.Advance;
+    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jnListEnd);
 
     // 5th error
-    if Reader.State <> jnError then
-      assert(false);
+
+    Reader.Advance;
+    AssertTrue(Reader.Error);
 
     Reader.Proceed;
-    Reader.Advance;
 
-    if Reader.State <> jnEOF then
-      assert(false);
+    AssertTrue(Reader.Advance = jnEOF);
 
   finally
     FreeAndNil(Stream);
@@ -516,7 +430,7 @@ begin
 end;
 
 // Test basic skip functionality
-procedure Test6;
+procedure TestSkip;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -530,40 +444,26 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
-
-    assert(num = 1);
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 1);
 
     Reader.Advance;
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Skip;
 
     Reader.Advance;    
 
-    if not Reader.Number(num) then
-      assert(false);
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 6);
 
-    assert(num = 6);
-
-    Reader.Advance;
-
-    if Reader.State <> jnListEnd then
-      assert(false);
-
-    Reader.Advance;
-
-    if Reader.State <> jnEOF then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnEOF);
   finally   
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -571,7 +471,7 @@ begin
 end;
 
 // Test skip with errors
-procedure Test7;
+procedure TestSkipWithErrors;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -586,46 +486,28 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
+
+    Reader.Advance;
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 1);
 
     Reader.Advance;
 
-    if not Reader.Number(num) then
-      assert(false);
-
-    assert(num = 1);
-
-    Reader.Advance;
-
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     Reader.Skip;  
-    Reader.Advance;
 
-    if Reader.State <> jnError then
-      assert(false);
-    if not Reader.Proceed then
-      assert(false);
-    if not Reader.Proceed then
-      assert(false);
+    AssertTrue(Reader.Advance = jnError);
 
-    if not Reader.Number(num) then
-      assert(false);
+    AssertTrue(Reader.Proceed);
+    AssertTrue(Reader.Proceed);
 
-    assert(num = 3);
+    AssertTrue(Reader.Number(num));
+    AssertTrue(num = 3);
 
-    Reader.Advance;
-
-    if Reader.State <> jnListEnd then
-      assert(false);
-
-    Reader.Advance;
-
-    if Reader.State <> jnEOF then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnEOF);
   finally   
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -634,7 +516,7 @@ end;
 
 
 // Test booleans
-procedure Test8;
+procedure TestBoolean;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -648,40 +530,25 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
 
-    if not Reader.Bool(b) then
-      assert(false);
-
-    assert(b);
+    AssertTrue(Reader.Bool(b));
+    AssertTrue(b);
 
     Reader.Advance;
 
-    if not Reader.Bool(b) then
-      assert(false);
-
-    assert(not b);
+    AssertTrue(Reader.Bool(b));
+    AssertTrue(not b);
 
     Reader.Advance;
 
-    if not Reader.Bool(b) then
-      assert(false);
+    AssertTrue(Reader.Bool(b));
+    AssertTrue(b);
 
-    assert(b);
-
-    Reader.Advance;
-
-    if Reader.State <> jnListEnd then
-      assert(false);
-
-    Reader.Advance;
-
-    if Reader.State <> jnEOF then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -689,7 +556,7 @@ begin
 end;
 
 // Test booleans in dict
-procedure Test9;
+procedure TestBoolsInDict;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -704,43 +571,26 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
     Reader.Advance;
 
-    if not Reader.key(k) then
-      assert(false);
+    AssertTrue(Reader.Key(k));
+    AssertTrue(k = 'foo');
 
-    assert(k = 'foo');
-
-    if not Reader.Bool(b) then
-      assert(false);
-
-    assert(b);
+    AssertTrue(Reader.Bool(b));
+    AssertTrue(b);
 
     Reader.Advance;
 
-    if not Reader.key(k) then
-      assert(false);
+    AssertTrue(Reader.Key(k));
+    AssertTrue(k = 'bar');
 
-    assert(k = 'bar');
+    AssertTrue(Reader.Bool(b));
+    AssertTrue(not b);
 
-    if not Reader.Bool(b) then
-      assert(false);
-
-    assert(not b);
-
-    Reader.Advance;
-
-    if Reader.State <> jnDictEnd then
-      assert(false);
-
-    Reader.Advance;
-
-    if Reader.State <> jnEOF then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jnEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -748,7 +598,7 @@ begin
 end;
 
 // Test numbers
-procedure Test10;
+procedure TestNumbers;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -765,39 +615,32 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
     Reader.Advance;
-    if Reader.Number(int) then
-      assert(false);
-    if not Reader.Number(dbl) then
-      assert(false);
-    assert(dbl = double(3.14));
+
+    AssertTrue(not Reader.Number(int));
+    AssertTrue(Reader.Number(dbl));
+    AssertTrue(dbl = double(3.14));
 
     Reader.Advance;
-    if not Reader.Number(int) then
-      assert(false);
-    assert(int = -42);
+
+    AssertTrue(Reader.Number(int));
+    AssertTrue(int = -42);
 
     Reader.Advance;
-    if not Reader.Number(dbl) then
-      assert(false);
-    assert(dbl = 1024);
+
+    AssertTrue(Reader.Number(dbl));
+    AssertTrue(dbl = 1024);
 
     Reader.Advance;
-    if Reader.Number(int) then
-      assert(false);
-    if not Reader.Number(u64) then
-      assert(false);
-    assert(u64 = uint64(9223372036854775808));
 
-    if Reader.Advance <> jnListEnd then
-      assert(false);
+    AssertTrue(not Reader.Number(int));
+    AssertTrue(Reader.Number(u64));
+    AssertTrue(u64 = uint64(9223372036854775808));
 
-    if Reader.Advance <> jnEOF then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jnEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -805,7 +648,7 @@ begin
 end;
 
 // Test escape sequences
-procedure Test11;
+procedure TestEscapeSequences;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -821,13 +664,10 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.Str(str) then
-      assert(false);
+    AssertTrue(Reader.Str(str));
+    AssertTrue(str = expected);
 
-    assert(str = expected);
-
-    if Reader.Advance <> jnEOF then
-      assert(false);
+    AssertTrue(Reader.Advance = jnEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -835,7 +675,7 @@ begin
 end;
 
 // Test erroneous escape sequences
-procedure Test12;
+procedure TestInvalidEscapeSequences;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -851,20 +691,16 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if Reader.Str(str) then
-      assert(false);
-    Reader.Proceed;
-    if Reader.Str(str) then
-      assert(false);
+    AssertTrue(not Reader.Str(str));
     Reader.Proceed;
 
-    if not Reader.Str(str) then
-      assert(false);
+    AssertTrue(not Reader.Str(str));
+    Reader.Proceed;
 
-    assert(str = expected);
+    AssertTrue(Reader.Str(str));
+    AssertTrue(str = expected);
 
-    if Reader.Advance <> jnEOF then
-      assert(false);
+    AssertTrue(Reader.Advance = jnEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -872,7 +708,7 @@ begin
 end;
 
 // Test StrBuf
-procedure Test13;
+procedure TestStrBuf;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -887,92 +723,64 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.List then
-      assert(false);
+    AssertTrue(Reader.List);
 
-    if Reader.Advance <> jnString then
-      assert(false);
+    AssertTrue(Reader.Advance = jnString);
 
     buf := '';
     SetLength(buf, 5);
 
     // "Hello World"
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> ' Worl') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' Worl'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 1) or (Copy(buf, 1, n) <> 'd') then
-      assert(false);
+    AssertTrue((n = 1) and (Copy(buf, 1, n) = 'd'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    AssertTrue((n = 0));
 
-    if Reader.Advance <> jnString then
-      assert(false);
+    AssertTrue(Reader.Advance = jnString);
 
     // Hello A World
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> ' A Wo') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' A Wo'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
-      assert(false);
+    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    AssertTrue((n = 0));
 
-    if Reader.Advance <> jnString then
-      assert(false);
+    AssertTrue(Reader.Advance = jnString);
 
     // ABCD\n\rEF
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'ABCD'#13) then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'ABCD'#13));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 3) or (Copy(buf, 1, n) <> #10'EF') then
-      assert(false);
+    AssertTrue((n = 3) and (Copy(buf, 1, n) = #10'EF'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    AssertTrue((n = 0));
 
-    if Reader.Advance <> jnString then
-      assert(false);
+    AssertTrue(Reader.Advance = jnString);
 
     // ""
     n := Reader.StrBuf(buf[1], 5);
-    if n <> 0 then
-      assert(false);
-    {n := Reader.StrBuf(buf[1], 5);
-    if n <> 0 then
-      assert(false);}
+    AssertTrue(n = 0);
 
-    if Reader.Advance <> jnString then
-      assert(false);
+    AssertTrue(Reader.Advance = jnString);
 
     // Hellö Wörld
     n := Reader.StrBuf(buf[1], 5);
-    assert(Ord(buf[5]) = $c3);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'Hell'#$c3) then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hell'#$c3));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> #$b6' W'#$c3#$b6) then
-      assert(false);
+    AssertTrue((n = 5) and(Copy(buf, 1, n) = #$b6' W'#$c3#$b6));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
-      assert(false);
+    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
     n := Reader.StrBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    AssertTrue((n = 0));
 
-    if Reader.Advance <> jnListEnd then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnListEnd);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -980,7 +788,7 @@ begin
 end;
 
 // Test KeyBuf
-procedure Test14;
+procedure TestKeyBuf;
 var
   Stream: TStream;
   Reader: TJsonReader;
@@ -996,114 +804,79 @@ begin
     Stream := TStringStream.Create(sample);
     Reader := TJsonReader.Create(Stream);
 
-    if not Reader.Dict then
-      assert(false);
+    AssertTrue(Reader.Dict);
 
-    if Reader.Advance <> jnKey then
-      assert(false);
+    AssertTrue(Reader.Advance = jnKey);
 
     buf := '';
     SetLength(buf, 5);
 
     // "Hello World"
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> ' Worl') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' Worl'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 1) or (Copy(buf, 1, n) <> 'd') then
-      assert(false);
+    AssertTrue((n = 1) and (Copy(buf, 1, n) = 'd'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    AssertTrue((n = 0));
 
-    if not Reader.Number(int) then
-      assert(false);
+    AssertTrue(Reader.Number(int));
+    AssertTrue(int = 1);
 
-    assert(int = 1);
-
-    if Reader.Advance <> jnKey then
-      assert(false);
+    AssertTrue(Reader.Advance = jnKey);
 
     // Hello A World
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'Hello') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> ' A Wo') then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' A Wo'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
-      assert(false);
+    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    AssertTrue((n = 0));
 
-    if not Reader.Number(int) then
-      assert(false);
+    AssertTrue(Reader.Number(int));
+    AssertTrue(int = 2);
 
-    assert(int = 2);
-
-    if Reader.Advance <> jnKey then
-      assert(false);
+    AssertTrue(Reader.Advance = jnKey);
 
     // ABCD\n\rEF
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'ABCD'#13) then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'ABCD'#13));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 3) or (Copy(buf, 1, n) <> #10'EF') then
-      assert(false);
+    AssertTrue((n = 3) and (Copy(buf, 1, n) = #10'EF'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    AssertTrue((n = 0));
 
-    if not Reader.Number(int) then
-      assert(false);
+    AssertTrue(Reader.Number(int));
+    AssertTrue(int = 3);
 
-    assert(int = 3);
-
-    if Reader.Advance <> jnKey then
-      assert(false);
+    AssertTrue(Reader.Advance = jnKey);
 
     // ""
     n := Reader.KeyBuf(buf[1], 5);
-    if n <> 0 then
-      assert(false);
+    AssertTrue(n = 0);
 
-    if not Reader.Number(int) then
-      assert(false);
+    AssertTrue(Reader.Number(int));
+    AssertTrue(int = 4);
 
-    assert(int = 4);
-
-    if Reader.Advance <> jnKey then
-      assert(false);
+    AssertTrue(Reader.Advance = jnKey);
 
     // Hellö Wörld
     n := Reader.KeyBuf(buf[1], 5);
-    assert(Ord(buf[5]) = $c3);
-    if (n <> 5) or (Copy(buf, 1, n) <> 'Hell'#$c3) then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hell'#$c3));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 5) or (Copy(buf, 1, n) <> #$b6' W'#$c3#$b6) then
-      assert(false);
+    AssertTrue((n = 5) and (Copy(buf, 1, n) = #$b6' W'#$c3#$b6));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 3) or (Copy(buf, 1, n) <> 'rld') then
-      assert(false);
+    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
     n := Reader.KeyBuf(buf[1], 5);
-    if (n <> 0) then
-      assert(false);
+    Assert(n = 0);
 
-    if not Reader.Number(int) then
-      assert(false);
+    AssertTrue(Reader.Number(int));
+    AssertTrue(int = 5);
 
-    assert(int = 5);
-
-    if Reader.Advance <> jnDictEnd then
-      assert(false);
-
+    AssertTrue(Reader.Advance = jnDictEnd);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -1113,19 +886,18 @@ end;
 begin
   SetMultiByteConversionCodePage(CP_UTF8);
 
-  Test1;
-  Test2;
-  Test3;
-  Test4;
-  Test5;
-  Test6;
-  Test7;
-  Test8;
-  Test9;
-  Test10;
-  Test11;
-  Test12;
-  Test13;
-  Test14;
+  TestList;
+  TestDict;
+  TestDictsListsMix;
+  TestErrorRecovery;
+  TestSkip;
+  TestSkipWithErrors;
+  TestBoolean;
+  TestBoolsInDict;
+  TestNumbers;
+  TestEscapeSequences;
+  TestInvalidEscapeSequences;
+  TestStrBuf;
+  TestKeyBuf;
 end.
 
