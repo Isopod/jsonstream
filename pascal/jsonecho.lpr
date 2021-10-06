@@ -69,7 +69,9 @@ const
     (Input: '{"a", ["b" '),
     (Input: '{[ '),
     (Input: '{{} "c":123'),
-    (Input: '{{"b":"a",} "c":123'),
+    (Input: '{{"b":"a",}, "c":123'),
+    (Input: '{{"b":01}, "c":123'),
+    (Input: '[{"b":"a",} "c",123]'),
     (Input: '{{"b":"a",} "c":123'),
     (Input: '{"a", {"b",} "c":123'),
     (Input: '[0]'),
@@ -213,7 +215,7 @@ end;
 begin
   {$if 1}
   AbortOnFirstError := false;
-  Features := [jfJSON5];
+  Features := [{jfJSON5}];
   OutStream := TIOStream.Create(iosOutPut);
   for i := low(samples) to high(samples) do
   begin 

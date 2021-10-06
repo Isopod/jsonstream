@@ -10,6 +10,7 @@ uses
 type
   TJsonString = string;
   TJsonChar = char;
+  PJsonChar = ^TJsonChar;
 
   TJsonFeature = (jfJson5);
   TJsonFeatures = set of TJsonFeature;
@@ -194,12 +195,6 @@ type
     // === General traversal ===
 
     // Move to the next element and return the new parse state.
-    // TODO: This function is probably confusing as its behavior for lists/dicts
-    // depends on whether List/Dict was called prior to its invokation or not:
-    // - If List/Dict was NOT called, then the list/dict will be skipped and
-    //   the next element will be its next sibling.
-    // - If List/Dict WAS called, then the next element will be its first child,
-    //   or the matching ListEnd/DictEnd element, if the list/dict is empty.
     function  Advance: TJsonState;
 
     // Return the current parse state.
@@ -753,6 +748,7 @@ Finalize:
   if (FLen > 0) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"', '/']) then
   begin
     StackPop; // Was never a number to begin with
+    StackPush(jsNull);
     StackPush(jsError);
     FState := jnError;
     SetLastError(jeInvalidToken, 'Invalid token.');
@@ -898,14 +894,14 @@ begin
       BeenSkipping := FSkipUntil < MaxInt;  
       FSkipUntil := MaxInt;
 
-      // When skiping from inside a structure like this:
+      // When skipping from inside a structure like this:
       //
       // [
       //   *Skip*
       //
       // After skipping, we still get the closing ]. But the user who called Skip() is not interested in i
       // this token, so we have to eat it.
-      if BeenSkipping and (StackTop in [jsAfterListItem, jsAfterDictItem]) then
+      if BeenSkipping and (StackTop in [jsAfterListItem, jsAfterDictItem])then
         InternalAdvance;
 
       break;
@@ -1180,7 +1176,7 @@ begin
   StackPop;
 
   // Skip control characters/whitespace
-  if {(not (StackTop = jsString)) and} (FBuf[FPos] in [#0..#32]) then
+  if {}(StackTop <> jsString) and (FBuf[FPos] in [#0..#32]) then
   begin
     SkipGarbage;
     exit;
@@ -1224,7 +1220,7 @@ begin
   end;
 
   // List: trailing comma
-  if (StackTop = jsListItem) and  (FToken = jtListEnd) then
+  if (StackTop = jsListItem) and (FToken = jtListEnd) then
   begin
     StackPop;
     StackPush(jsAfterListItem);
@@ -1321,7 +1317,18 @@ begin
   if StackTop = jsNumber then
   begin
     FState := jnNumber;
-    FSkip := true;     
+    FSkip := true;
+    Result := true;
+    exit;
+  end;
+
+  if StackTop = jsNull then
+  begin
+    // This case only occurs when a garbage token like 23abc occurred, that looked like
+    // a number at first but turned out to be garbage. ParseNumber then turns that into a
+    // null value.
+    FState := jnNull;
+    FSkip := true;
     Result := true;
     exit;
   end;
@@ -1356,7 +1363,7 @@ function TJsonReader.Proceed: Boolean;
 begin
   Result := InternalProceed;
 
-  if (High(FStack) >= FSkipUntil) then
+  if Result and (High(FStack) >= FSkipUntil) then
     Advance;
 end;
 
@@ -2216,8 +2223,8 @@ procedure TJsonWriter.Key(const K: TJsonString);
 begin
   KeyBegin;
 
-  StrBufInternal(K[1], SizeOf(Char) * Length(K), true);
-  StrBufInternal(PChar(nil)^, 0, true);
+  StrBufInternal(PJsonChar(K)^, SizeOf(TJsonChar) * Length(K), true);
+  StrBufInternal(PJsonChar(nil)^, 0, true);
 
   StackPop;
   StackPush(jsDictValue);
@@ -2242,8 +2249,8 @@ procedure TJsonWriter.Str(const S: TJsonString);
 begin
   ValueBegin('string');
 
-  StrBufInternal(S[1], SizeOf(Char) * Length(S), false);
-  StrBufInternal(PChar(nil)^, 0, false);
+  StrBufInternal(PJsonChar(S)^, SizeOf(TJsonChar) * Length(S), false);
+  StrBufInternal(PJsonChar(nil)^, 0, false);
 
   ValueEnd;
 end;
@@ -2384,7 +2391,8 @@ begin
   Dec(FLevel);
   if not FStructEmpty then
   begin
-    Write(LineEnding);
+    if FPrettyPrint then
+      Write(LineEnding);
     WriteSeparator;
   end;
   Write('}');
@@ -2416,7 +2424,8 @@ begin
   Dec(FLevel);
   if not FStructEmpty then
   begin
-    Write(LineEnding);
+    if FPrettyPrint then
+      Write(LineEnding);
     WriteSeparator;
   end;
   Write(']');

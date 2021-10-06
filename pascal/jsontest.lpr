@@ -5,7 +5,7 @@ uses
 
 procedure AssertTrue(Cond: Boolean; const msg:string=''); inline;
 begin
-  if Cond then
+  if not Cond then
     raise EAssertionFailed.Create(msg);
 end;
 
@@ -476,7 +476,6 @@ var
   Stream: TStream;
   Reader: TJsonReader;
   num:    integer;
-  i:      integer;
 const
   sample = '[1,{2,"a":"b"},3]';
 begin
@@ -883,6 +882,268 @@ begin
   end;
 end;
 
+procedure TestSamples;
+type
+  TTestCase = record
+    Input: String;
+    Output: String;
+  end;
+
+var
+  InStream, OutStream: TStream;
+  Reader: TJsonReader;
+  Writer: TJsonWriter;
+  Actual: String;
+  i: integer;
+
+  function ReadValue: Boolean; forward;
+
+  procedure ReadList;
+  begin
+    Writer.List;
+    while Reader.Advance <> jnListEnd do
+      ReadValue;
+    Writer.ListEnd;
+  end;
+
+  procedure ReadDict;
+  var
+    Key: String;
+  begin
+    Writer.Dict;
+
+    while Reader.Advance <> jnDictEnd do
+    begin
+      repeat
+        if Reader.Key(Key) then
+        begin
+          Writer.Key(Key);
+          ReadValue;
+        end
+        else if Reader.Error then
+        begin
+          if Reader.Proceed then
+            continue;
+        end;
+        break;
+      until false;
+    end;
+
+    Writer.DictEnd;
+  end;
+
+  function ReadValue: Boolean;
+  var
+    i64: int64;
+    u64: uint64;
+    dbl: double;
+    Str: string;
+    bool: Boolean;
+  begin
+    repeat
+      Result := True;
+
+      if Reader.Number(i64) then
+        Writer.Number(i64)
+      else if Reader.Number(u64) then
+        Writer.Number(u64)
+      else if Reader.Number(dbl) then
+        Writer.Number(dbl)
+      else if Reader.Str(Str) then
+        Writer.Str(Str)
+      else if Reader.List then
+        ReadList
+      else if Reader.Dict then
+        ReadDict
+      else if Reader.Null then
+        Writer.Null
+      else if Reader.Bool(bool) then
+        Writer.Bool(bool)
+      else if Reader.Error then
+      begin
+        if Reader.Proceed then
+          continue;
+      end;
+      break;
+    until false;
+  end;
+
+const
+  samples: array of TTestCase = (
+     (Input:
+        '[' +
+          '{' +
+            '"name":"Alan Turing",' +
+            '"profession":"computer scientist",' +
+            '"born":1912,' +
+            '"died":1954,' +
+            '"tags": ["turing machine", "cryptography", "enigma", "computability"]' +
+          '},' +
+          '{' +
+            '"name":"Kurt Gödel", ' +
+            '"profession": "mathematician", ' +
+            '"born":1906,' +
+            '"died":1978,' +
+            '"tags": ["incompleteness theorem", "set theory", "logic", "philosophy"]' +
+          '},' +
+          '{' +
+            '"name":"Bobby \"\\\"\" Tables",' +
+            '"profession": "troll", ' +
+            '"born": 1970, '+
+            '"died": 2038, '+
+            '"tags": ["escape sequence", "input validation", "sql injection"]' +
+          '}' +
+        ']';
+       Output:
+        '[' +
+          '{' +
+            '"name":"Alan Turing",' +
+            '"profession":"computer scientist",' +
+            '"born":1912,' +
+            '"died":1954,' +
+            '"tags":["turing machine","cryptography","enigma","computability"]' +
+          '},' +
+          '{' +
+            '"name":"Kurt Gödel",' +
+            '"profession":"mathematician",' +
+            '"born":1906,' +
+            '"died":1978,' +
+            '"tags":["incompleteness theorem","set theory","logic","philosophy"]' +
+          '},' +
+          '{' +
+            '"name":"Bobby \"\\\"\" Tables",' +
+            '"profession":"troll",' +
+            '"born":1970,'+
+            '"died":2038,'+
+            '"tags":["escape sequence","input validation","sql injection"]' +
+          '}' +
+        ']'
+      ),
+      (Input:  '["Hello", "World"}';
+       Output: '["Hello","World"]'),
+      (Input:  '[}';
+       Output: '[]'),
+      (Input:  '{[], "Foo": "Bar"}';
+       Output: '{"Foo":"Bar"}'),
+      (Input:  '{"garbage": 03.14, "foo": "bar"}';
+       Output: '{"garbage":3.14,"foo":"bar"}'),
+      (Input:  '[03.14,3.14]';
+       Output: '[3.14,3.14]'),
+      (Input:  '[1 2]';
+       Output: '[1,2]'),
+      (Input:  '{"abc" "123"}';
+       Output: '{"abc":null,"123":null}'),
+      (Input:  '{"abc" 123}';
+       Output: '{"abc":null,"123":null}'),
+      (Input:  '{"abc" 123 "a" : "b"}';
+       Output: '{"abc":null,"123":null,"a":"b"}'),
+      (Input:  '{123:123,  "a" : "b"}';
+       Output: '{"123":123,"a":"b"}'),
+      (Input:  '{123:123,  23 : "b"}';
+       Output: '{"123":123,"23":"b"}'),
+      (Input:  '{abc123 : "bcd"}';
+       Output: '{"abc123":"bcd"}'),
+      (Input:  '{123:[123,  23 : "b"}';
+       Output: '{"123":[123,23,"b"]}'),
+      (Input:  '{123:[123,  23 : "b"]}';
+       Output: '{"123":[123,23,"b"]}'),
+      (Input:  '{"a":123abc, "c":"d"}';
+       Output: '{"a":null,"c":"d"}'),
+      (Input:  '{"123a":, "c":"d"}';
+       Output: '{"123a":null,"c":"d"}'),
+      (Input:  '{"123a" "c" "d" }';
+       Output: '{"123a":null,"c":null,"d":null}'),
+      (Input:  '{"a" ';
+       Output: '{"a":null}'),
+      (Input:  '{"a", {"b" ';
+       Output: '{"a":null}'),
+      (Input:  '{"a", {"b": ';
+       Output: '{"a":null}'),
+      (Input:  '{"a", ["b" ';
+       Output: '{"a":null}'),
+      (Input:  '{[ ';
+       Output: '{}'),
+      (Input:  '{{} "c":123';
+       Output: '{"c":123}'),
+      (Input:  '{["a"], "c":123';
+       Output: '{"c":123}'),
+      (Input:  '{["a",], "c":123';
+       Output: '{"c":123}'),
+      (Input:  '{{"b":"a",} "c":123';
+       Output: '{"c":123}'),
+      (Input:  '{{"b":"a",} "c":123';
+       Output: '{"c":123}'),
+      (Input:  '{"a", {"b",} "c":123';
+       Output: '{"a":null,"c":123}'),
+      (Input:  '[0]';
+       Output: '[0]'),
+      (Input:  '{"a":2b3}';
+       Output: '{"a":null}'),
+      (Input:  '{"';
+       Output: '{"":null}'),
+      (Input:  '{"a":23ueuiaeia232, "b": truefalse, "c": "}';
+       Output: '{"a":null,"b":"truefalse","c":"}"}'),
+      (Input:  '{"a": "b",}';
+       Output: '{"a":"b"}'),
+      (Input:  '["a",]';
+       Output: '["a"]'),
+      (Input:  '[]';
+       Output: '[]'),
+      (Input:  '{"n": 003.14}';
+       Output: '{"n":3.14}'),
+      (Input:  '{{123: 321} "c":42}';
+       Output: '{"c":42}'),
+      (Input:  '{"text": "cote \r\naiu e [/code" }';
+       Output: '{"text":"cote \r\naiu e [/code"}'),
+      (Input:  '["a]';
+       Output: '["a]"]'),
+      (Input:  '["\u41"]';
+       Output: '["A"]'),
+      (Input:  '"a'#13#10'b"';
+       Output: '"a\r\nb"'),
+      (Input:  '['#1']';
+       Output: '[]'),
+      (Input:  '[a'#10'b]';
+       Output: '["a","b"]'),
+      (Input:  '["abc\'#13#10'def\'#10'ghi"]';
+       Output: '["abc\\\r\ndef\\\nghi"]'),
+      (Input:  '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]';
+       {Output: '["a", 123.5]')}
+       Output: '["a","/*hello","*w/orld*/123.5//this","is","a","number"]'),
+      (Input:  '[-Infinity, 42]';
+       Output: '[null,42]'),
+      (Input:  '{"a":-Infinity, "b":42}';
+       Output: '{"a":null,"b":42}')
+    );
+begin
+  for i := low(samples) to high(samples) do
+  begin
+    InStream := nil;
+    OutStream := nil;
+    Reader := nil;
+    Writer := nil;
+    try
+      InStream := TStringStream.Create(samples[i].Input);
+      OutStream := TMemoryStream.Create;
+      Reader := TJsonReader.Create(InStream);
+      Writer := TJsonWriter.Create(OutStream);
+
+      ReadValue;
+
+      SetString(Actual, TMemoryStream(OutStream).Memory, TMemoryStream(OutStream).Size);
+      AssertTrue(
+        Actual = samples[i].Output,
+        Format(LineEnding + 'Expected: %s' + LineEnding + 'Got:      %s', [samples[i].Output, Actual])
+      );
+    finally
+      FreeAndNil(InStream); 
+      FreeAndNil(OutStream);
+      FreeAndNil(Reader);
+      FreeAndNil(Writer);
+    end;
+  end;
+end;
+
 begin
   SetMultiByteConversionCodePage(CP_UTF8);
 
@@ -899,5 +1160,6 @@ begin
   TestInvalidEscapeSequences;
   TestStrBuf;
   TestKeyBuf;
+  TestSamples;
 end.
 
