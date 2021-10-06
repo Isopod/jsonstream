@@ -31,7 +31,7 @@
         <IsPartOfProject Value="True"/>
       </Unit0>
       <Unit1>
-        <Filename Value="json.pas"/>
+        <Filename Value="jsonstream.pas"/>
         <IsPartOfProject Value="True"/>
       </Unit1>
     </Units>

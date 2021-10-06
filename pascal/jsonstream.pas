@@ -1,4 +1,4 @@
-unit json;
+unit jsonstream;
 
 {$mode Delphi}
 

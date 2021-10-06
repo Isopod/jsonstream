@@ -1,7 +1,7 @@
 program jsonecho;
 
 uses
-  sysutils, classes, iostream, json;
+  sysutils, classes, iostream, jsonstream;
 
 function ReadValue: Boolean; forward;
 

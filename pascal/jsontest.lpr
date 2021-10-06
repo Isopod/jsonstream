@@ -1,7 +1,7 @@
 program jsontest;
 
 uses
-  sysutils, classes, json;
+  sysutils, classes, jsonstream;
 
 // Test basic list
 procedure Test1;
