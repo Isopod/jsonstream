@@ -3,7 +3,7 @@ program jsontest;
 uses
   sysutils, classes, jsonstream;
 
-procedure AssertTrue(Cond: Boolean; const msg:string=''); inline;
+procedure AssertTrue(Cond: Boolean; const msg: string=''); inline;
 begin
   if not Cond then
     raise EAssertionFailed.Create(msg);
@@ -222,99 +222,6 @@ begin
     FreeAndNil(Reader);
   end;
 end;
-
-// More practical example
-(*
-procedure Test4;
-var
-  Stream: TStream;
-  Reader: TJsonReader;
-const
-  sample =
-    '[' +
-      '{' +
-        '"name":"Alan Turing",' +
-        '"profession":"computer scientist",' +
-        '"born":1912,' +
-        '"died":1954,' +
-        '"tags": ["turing machine", "cryptography", "enigma", "computability"]' +
-      '},' +
-      '{' +
-        '"name":"Kurt Gödel", ' +
-        '"profession": "mathematician", ' +
-        '"born":1906,' +
-        '"died":1978,' +
-        '"tags": ["incompleteness theorem", "set theory", "logic", "philosophy"]' +
-      '},' +
-      '{' +
-        '"name":"Bobby \"\\\"\" Tables",' +
-        '"profession": "troll", ' +
-        '"born": 1970, '+
-        '"died": 2038, '+
-        '"tags": ["escape sequence", "input validation", "sql injection"]' +
-      '}' +
-    ']';
-
-  procedure ReadValue; forward;
-
-  procedure ReadList;
-  begin
-    WriteLn('List Begin');
-    while Reader.Advance <> jnListEnd do
-      ReadValue;               
-    WriteLn('List End');
-  end;
-
-  procedure ReadDict;
-  var
-    Key: String;
-  begin               
-    WriteLn('Dict Begin');
-    while Reader.Advance <> jnDictEnd do
-    begin
-      if Reader.Key(Key) then
-      begin
-        WriteLn('Key: ', Key);
-        ReadValue;
-      end
-      else
-        WriteLn('Parse error');
-    end;
-    WriteLn('Dict End');
-  end;
-
-  procedure ReadValue;
-  var
-    Num: integer;
-    Str: string;
-  begin
-    if Reader.Number(Num) then
-      WriteLn('Number: ', Num)
-    else if Reader.Str(Str) then
-      WriteLn('String: ', Str)
-    else if Reader.List then
-      ReadList
-    else if Reader.Dict then
-      ReadDict
-    else
-      WriteLn('Parse Error');
-  end;
-
-begin
-  Stream := nil;
-  Reader := nil;
-  try
-    Stream := TStringStream.Create(sample);
-    Reader := TJsonReader.Create(Stream);
-
-    ReadValue;
-
-  finally
-    FreeAndNil(Stream);
-    FreeAndNil(Reader);
-  end;
-end;
-*)
 
 // Test error recovery
 procedure TestErrorRecovery;
@@ -1108,7 +1015,7 @@ const
       (Input:  '["abc\'#13#10'def\'#10'ghi"]';
        Output: '["abc\\\r\ndef\\\nghi"]'),
       (Input:  '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]';
-       {Output: '["a", 123.5]')}
+       {Output: '["a", 123.5]')} // JSON5 mode
        Output: '["a","/*hello","*w/orld*/123.5//this","is","a","number"]'),
       (Input:  '[-Infinity, 42]';
        Output: '[null,42]'),
@@ -1130,10 +1037,16 @@ begin
 
       ReadValue;
 
-      SetString(Actual, TMemoryStream(OutStream).Memory, TMemoryStream(OutStream).Size);
+      SetString(
+        Actual, TMemoryStream(OutStream).Memory, TMemoryStream(OutStream).Size
+      );
       AssertTrue(
         Actual = samples[i].Output,
-        Format(LineEnding + 'Expected: %s' + LineEnding + 'Got:      %s', [samples[i].Output, Actual])
+        Format(
+          LineEnding + 'Expected: %s' +
+          LineEnding + 'Got:      %s',
+          [samples[i].Output, Actual]
+        )
       );
     finally
       FreeAndNil(InStream); 

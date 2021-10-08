@@ -119,23 +119,26 @@ type
     FNumberErr:        Boolean;
 
     // === String parsing ===
-    // Delimiter of the current string (double-quote, single-quote, or word boundary)
+    // Delimiter of the current string (double-quote, single-quote, or word
+    // boundary)
     FStringMode:       TJsonStringMode;
-    // If an error occurred during Str() or Key(), the part that has been read is temporarily
-    // stored here between successive calls.
+    // If an error occurred during Str() or Key(), the part that has been read
+    // is temporarily stored here between successive calls.
     FSavedStr:         TJsonString;
     // True if we reached the end of the string
     FStringEnd:        Boolean;
-    // If Proceed was called after a string error: Tell string routines to ignore the error.
+    // If Proceed was called after a string error: Tell string routines to
+    // ignore the error.
     FStrIgnoreError:   boolean;
     // Temporary storage for decoded escape sequences.
     FEscapeSequence:   TJsonString;
 
-    // Nesting depth of structures (lists + dicts), e.g. "[[" would be depth 2. This is different
-    // from Length(FStack) because FStack contains internal nodes such as jsDictValue etc..
-    // This is checked against MaxNestingDepth and an error is generated if the maximum nesting
-    // depth is exceeded. The purpose of this is to guarantee an upper bound on memory consumption
-    // that doesn't grow linearly with the input in the worst case.
+    // Nesting depth of structures (lists + dicts), e.g. "[[" would be depth 2.
+    // This is different from Length(FStack) because FStack contains internal
+    // nodes such as jsDictValue etc.. This is checked against MaxNestingDepth
+    // and an error is generated if the maximum nesting depth is exceeded. The
+    // purpose of this is to guarantee an upper bound on memory consumption that
+    // doesn't grow linearly with the input in the worst case.
     FNestingDepth:     integer;
     FMaxNestingDepth:  integer;
 
@@ -190,7 +193,10 @@ type
     function  AcceptKey: boolean;
     procedure SetLastError(Error: TJsonError; const Msg: string);
   public
-    constructor Create(Stream: TStream; Features: TJsonFeatures=[]; MaxNestingDepth: integer=MaxInt);
+    constructor Create(
+      Stream: TStream; Features: TJsonFeatures=[];
+      MaxNestingDepth: integer=MaxInt
+    );
 
     // === General traversal ===
 
@@ -343,13 +349,17 @@ type
     procedure StackPush(State: TJsonInternalState);
     function  StackPop: TJsonInternalState;
   public
-    constructor Create(Stream: TStream; Features: TJsonFeatures=[]; PrettyPrint: Boolean=false; const Indentation: string='  ');
+    constructor Create(
+      Stream: TStream; Features: TJsonFeatures=[];
+      PrettyPrint: Boolean=false; const Indentation: string='  '
+    );
 
     procedure Key(const K: TJsonString);
     // Streaming equivalent of the Key() method. See StrBuf().
     procedure KeyBuf(const Buf; BufSize: SizeInt);
     procedure Str(const S: TJsonString);          
-    // Streaming equivalent of the Str() method. To indicate the end of the string, call once with BufSize set to 0.
+    // Streaming equivalent of the Str() method. To indicate the end of the
+    // string, call once with BufSize set to 0.
     // Note: To write an empty string, you have to call the method twice:
     //   StrBuf(..., 0); // Write 0 bytes
     //   StrBuf(..., 0); // Signal end of string
@@ -357,8 +367,9 @@ type
     procedure Number(Num: integer); overload;
     procedure Number(Num: int64); overload;
     procedure Number(Num: uint64); overload;
-    // Write number if hexadecimal format, if possible. This required jfJson5 to be included in Features. If jfJson5
-    // is not included in Features, a decimal number will be written, instead.
+    // Write number if hexadecimal format, if possible. This required jfJson5 to
+    // be included in Features. If jfJson5 is not included in Features, a
+    // decimal number will be written, instead.
     procedure NumberHex(Num: uint64); overload;
     procedure Number(Num: double); overload;
     procedure Bool(Bool: Boolean);
@@ -375,7 +386,8 @@ uses
   math, cwstring;
 
 type
-  TJsonCharArray = array[0..High(SizeInt) div sizeof(TJsonChar) - 1] of TJsonChar;
+  TJsonCharArray =
+    array[0..High(SizeInt) div sizeof(TJsonChar) - 1] of TJsonChar;
 
 { TJsonReader }
 
@@ -393,6 +405,7 @@ begin
   FLastError         := jeNoError;
   FLastErrorPosition := 0;
   FMaxNestingDepth   := MaxNestingDepth;
+
   StackPush(jsInitial);
   Advance;
 end;
@@ -511,6 +524,10 @@ begin
   Key(dummy);
 end;
 
+const
+  WordBoundaryChars: set of TJsonChar =
+    [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"', '/'];
+
 function TJsonReader.MatchString(const Str: TJsonString): Boolean;
 var
   i: integer;
@@ -526,7 +543,8 @@ begin
     if FBuf[FPos + i] <> Str[i + 1] then
       exit;
 
-  if (FLen > length(Str)) and not (FBuf[FPos + length(Str)] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"']) then
+  if (FLen > length(Str)) and
+     not (FBuf[FPos + length(Str)] in WordBoundaryChars) then
     exit;
 
   Result := true;
@@ -544,6 +562,7 @@ var
   LeadingZeroes: integer;
   TmpExp:   integer;
   TmpExpSign: integer;
+
 label
   Finalize;
 
@@ -596,7 +615,8 @@ begin
   RefillBuffer(2);
 
   // Hex number (JSON5)
-  if (jfJson5 in FFeatures) and (FBuf[FPos] = '0') and (FPos + 1 < FLen) and (FBuf[FPos + 1] in ['x', 'X']) then
+  if (jfJson5 in FFeatures) and (FBuf[FPos] = '0') and (FPos + 1 < FLen) and
+     (FBuf[FPos + 1] in ['x', 'X']) then
   begin
     Inc(FPos, 2);
     RefillBuffer;
@@ -662,7 +682,8 @@ begin
     SetLastError(jeInvalidNumber, 'Number has leading zeroes.');
   end;
 
-  if (LeadingZeroes > 0) and not ((FLen >= 0) and (FBuf[FPos] in ['0'..'9'])) then
+  if (LeadingZeroes > 0) and
+     not ((FLen >= 0) and (FBuf[FPos] in ['0'..'9'])) then
   begin
     if (FLen >= 0) and (FBuf[FPos] = '.') then
     begin
@@ -724,10 +745,11 @@ begin
     begin
       if not (FBuf[FPos] in ['0'..'9']) then
         break;
-      // The exponent range for double is something like -324 to +308, i.e. the exponent will
-      // never have more than 3 digits. We just want to make sure we don't overflow for
-      // pathological inputs. Truncating the exponent is not a problem as values exceeding the
-      // possible exponent range will be rounded to -INF or +INF, anyway.
+      // The exponent range for double is something like -324 to +308, i.e. the
+      // exponent will never have more than 3 digits. We just want to make sure
+      // we don't overflow for pathological inputs. Truncating the exponent is
+      // not a problem as values exceeding the possible exponent range will be
+      // rounded to -INF or +INF, anyway.
       if TmpExp < 10000 then
         TmpExp := TmpExp * 10 + (ord(FBuf[FPos]) - ord('0'));
 
@@ -745,7 +767,7 @@ Finalize:
 
   // Check if there is garbage at the end
   RefillBuffer;
-  if (FLen > 0) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"', '/']) then
+  if (FLen > 0) and not (FBuf[FPos] in WordBoundaryChars) then
   begin
     StackPop; // Was never a number to begin with
     StackPush(jsNull);
@@ -755,7 +777,7 @@ Finalize:
 
     // Skip rest of token
     repeat
-      while (FPos < FLen) and not (FBuf[FPos] in [#0..#32, '[', ']', '{', '}', ':', ',', ';', '"', '/']) do
+      while (FPos < FLen) and not (FBuf[FPos] in WordBoundaryChars) do
         Inc(FPos);
 
       RefillBuffer;
@@ -899,8 +921,8 @@ begin
       // [
       //   *Skip*
       //
-      // After skipping, we still get the closing ]. But the user who called Skip() is not interested in i
-      // this token, so we have to eat it.
+      // After skipping, we still get the closing ]. But the user who called
+      // Skip() is not interested in this token, so we have to eat it.
       if BeenSkipping and (StackTop in [jsAfterListItem, jsAfterDictItem])then
         InternalAdvance;
 
@@ -969,10 +991,11 @@ begin
     FSkip := false;
     Reduce;   
 
-    // Note that the above loop only looks at FPopUntil and does not pay respect to FSkipUntil!
-    // Therefore it can pop one more element than we actually want to pop. If this case happens,
-    // push the item back on. (Unfortunately it is not trivial to integrate the check into the
-    // loop condition itself, as we may only know whether we went to far after we called Reduce()).
+    // Note that the above loop only looks at FPopUntil and does not pay respect
+    // to FSkipUntil! Therefore it can pop one more element than we actually
+    // want to pop. If this case happens, push the item back on. (Unfortunately
+    // it is not trivial to integrate the check into the loop condition itself,
+    // as we may only know whether we went to far after we called Reduce()).
     if (FSkipUntil < MaxInt) and (High(FStack) < FSkipUntil) then
       StackPush(PoppedItem);
 
@@ -1001,7 +1024,9 @@ begin
         else if not AcceptValue then
         begin
           FState := jnError;
-          InvalidOrUnexpectedToken('Expected `[` or `{`, number, boolean, string or null.');
+          InvalidOrUnexpectedToken(
+            'Expected `[` or `{`, number, boolean, string or null.'
+          );
           StackPush(jsError);
         end;
       end;
@@ -1021,14 +1046,19 @@ begin
           else
           begin
             FState := jnError;
-            SetLastError(jeUnexpectedListEnd, 'Trailing comma before end of list.');
+            SetLastError(
+              jeUnexpectedListEnd,
+              'Trailing comma before end of list.'
+            );
             StackPush(jsError);
           end;
         end
         else if not AcceptValue then
         begin
           FState := jnError;
-          InvalidOrUnexpectedToken('Expected `[` or `{`, number, boolean, string or null.');
+          InvalidOrUnexpectedToken(
+            'Expected `[` or `{`, number, boolean, string or null.'
+          );
           StackPush(jsError);
         end;
       end;
@@ -1070,7 +1100,10 @@ begin
           else
           begin
             FState := jnError;
-            SetLastError(jeUnexpectedDictEnd, 'Trailing comma before end of dict.');
+            SetLastError(
+              jeUnexpectedDictEnd,
+              'Trailing comma before end of dict.'
+            );
             StackPush(jsError);
           end;
         end
@@ -1101,7 +1134,9 @@ begin
       if not AcceptValue then
       begin
         FState := jnError;
-        InvalidOrUnexpectedToken('Expected `[`, `{`, number, boolean, string or null.');
+        InvalidOrUnexpectedToken(
+          'Expected `[`, `{`, number, boolean, string or null.'
+        );
         StackPush(jsError);
       end;
     jsAfterDictItem:
@@ -1146,13 +1181,25 @@ procedure TJsonReader.InvalidOrUnexpectedToken(const Msg: TJsonString);
 begin
   case FToken of
     jtUnknown:
-      SetLastError(jeInvalidToken, Format('Unexpected character `%s`. %s', [FBuf[FPos], Msg]));
+      SetLastError(
+        jeInvalidToken,
+        Format('Unexpected character `%s`. %s', [FBuf[FPos], Msg])
+      );
     jtEOF:
-      SetLastError(jeUnexpectedEOF, Format('Unexpected end-of-file. %s', [Msg]));
+      SetLastError(
+        jeUnexpectedEOF,
+        Format('Unexpected end-of-file. %s', [Msg])
+      );
     jtNumber:
-      SetLastError(jeUnexpectedToken, Format('Unexpected numeral. %s', [Msg]));
+      SetLastError(
+        jeUnexpectedToken,
+        Format('Unexpected numeral. %s', [Msg])
+      );
     else
-      SetLastError(jeUnexpectedToken, Format('Unexpected `%s`. %s', [FBuf[FPos], Msg]));
+      SetLastError(
+        jeUnexpectedToken,
+        Format('Unexpected `%s`. %s', [FBuf[FPos], Msg])
+      );
   end;
 end;
 
@@ -1184,7 +1231,8 @@ begin
 
   // Treat garbage tokens as string
   if (FToken = jtUnknown) or
-     (StackTop in [jsDictHead, jsDictItem]) and (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
+     (StackTop in [jsDictHead, jsDictItem]) and
+     (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
   begin
     if StackTop in [jsDictHead, jsDictItem] then
     begin
@@ -1267,7 +1315,8 @@ begin
   end;
 
   // Dict: Expected key, but got something else
-  if (StackTop in [jsDictHead, jsDictItem]) and (FToken in [jtDict, jtList{, jtNumber, jtTrue, jtFalse, jtNull}]) then
+  if (StackTop in [jsDictHead, jsDictItem]) and
+     (FToken in [jtDict, jtList]) then
   begin
     StackPush(jsDictValue);
     FSkip := true;
@@ -1324,9 +1373,9 @@ begin
 
   if StackTop = jsNull then
   begin
-    // This case only occurs when a garbage token like 23abc occurred, that looked like
-    // a number at first but turned out to be garbage. ParseNumber then turns that into a
-    // null value.
+    // This case only occurs when a garbage token like 23abc occurred, that
+    // looked like  a number at first but turned out to be garbage. ParseNumber
+    // then turns that into a null value.
     FState := jnNull;
     FSkip := true;
     Result := true;
@@ -1409,13 +1458,14 @@ begin
   case FStringMode of
     jsmDoubleQuoted: StopChars := ['\', '"'];
     jsmSingleQuoted: StopChars := ['\', ''''];
-    jsmUnquoted:     StopChars := [#0..#32, {'\',} ':', ',', '{', '}', '[', ']'];
+    jsmUnquoted:     StopChars := [#0..#32, ':', ',', '{', '}', '[', ']'];
   end;
 
   // JSON strings must not contain line-breaks
   StopChars := StopChars + [#13, #10];
 
-  // In pure JSON, all codepoints < 32 are not allowed and must be encoded using escape sequences, instead.
+  // In pure JSON, all codepoints < 32 are not allowed and must be encoded using
+  // escape sequences, instead.
   if not (jfJson5 in FFeatures) then
     StopChars := StopChars + [#0..#31];
 
@@ -1429,8 +1479,8 @@ begin
 
   while true do
   begin
-    // There may be some remaining buffered chars from an escape sequence that need to be emitted
-    // before we can advance.
+    // There may be some remaining buffered chars from an escape sequence that
+    // need to be emitted  before we can advance.
     if FEscapeSequence <> '' then
     begin
       n := Length(FEscapeSequence);
@@ -1439,7 +1489,11 @@ begin
 
       Move(FEscapeSequence[1], _Buf[o1], n);
       if Length(FEscapeSequence) > n then
-        Move(FEscapeSequence[n + 1], FEscapeSequence[1], length(FEscapeSequence) - n);
+        Move(
+          FEscapeSequence[n + 1],
+          FEscapeSequence[1],
+          length(FEscapeSequence) - n
+        );
       SetLength(FEscapeSequence, length(FEscapeSequence) - n);
       Inc(o1, n);
     end;
@@ -1449,9 +1503,10 @@ begin
     o0 := o1;
     l  := FLen;
 
-    // Hopefully, most characters will be regular characters, not escape sequences
-    // or string delimiters. We try to copy as much data as we can using a simple
-    // block move until we encounter a character that needs special processing.
+    // Hopefully, most characters will be regular characters, not escape
+    // sequences or string delimiters. We try to copy as much data as we can
+    // using a simple block move until we encounter a character that needs
+    // special processing.
     while (i1 < l) and (o1 < BufSize) and not (FBuf[i1] in StopChars) do
     begin
       Inc(i1);
@@ -1495,7 +1550,8 @@ begin
     begin
       // We have an escape sequence
 
-      // Maximum length of an escape sequence is 6 (\u1234), so we need 6 characters lookahead
+      // Maximum length of an escape sequence is 6 (\u1234), so we need 6
+      // characters lookahead
       RefillBuffer(6);
                           
       // EOF after the '\'?
@@ -1520,7 +1576,8 @@ begin
         uc := 0;
         k := 0;
 
-        while (k < 4) and (FPos + 2 + k < FLen) and (HexDigit(FBuf[FPos + 2 + k]) >= 0) do
+        while (k < 4) and (FPos + 2 + k < FLen) and
+              (HexDigit(FBuf[FPos + 2 + k]) >= 0) do
         begin
           uc := uc shl 4 or HexDigit(FBuf[FPos + 2 + k]);
           inc(k);
@@ -1532,7 +1589,10 @@ begin
           begin
             FState := jnError;
             StackPush(jsError);
-            SetLastError(jeInvalidEscapeSequence, 'Invalid escape sequence in string. Expected four hex digits.');
+            SetLastError(
+              jeInvalidEscapeSequence,
+              'Invalid escape sequence in string. Expected four hex digits.'
+            );
             break;
           end;
 
@@ -1579,7 +1639,10 @@ begin
             begin
               FState := jnError;         
               StackPush(jsError);
-              SetLastError(jeInvalidEscapeSequence, 'Invalid escape sequence in string.');
+              SetLastError(
+                jeInvalidEscapeSequence,
+                'Invalid escape sequence in string.'
+              );
               break;
             end
             else
@@ -1601,7 +1664,11 @@ begin
       begin
         FState := jnError;     
         StackPush(jsError);
-        SetLastError(jeInvalidEscapeSequence, 'Invalid character in string. Codepoints below 32 must be encoded using escape sequence (\u....).');
+        SetLastError(
+          jeInvalidEscapeSequence,
+          'Invalid character in string. Codepoints below 32 must be encoded ' +
+          'using escape sequence (\u....).'
+        );
         break;
       end
       else
@@ -1686,7 +1753,10 @@ begin
         FState := jnError;
         FPopUntil := 0;
         StackPush(jsError);
-        SetLastError(jeNestingTooDeep, Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]));
+        SetLastError(
+          jeNestingTooDeep,
+          Format('Nesting limit of %d exceeded.', [FMaxNestingDepth])
+        );
       end
       else
       begin
@@ -1704,7 +1774,10 @@ begin
         FState := jnError;
         FPopUntil := 0;
         StackPush(jsError);  
-        SetLastError(jeNestingTooDeep, Format('Nesting limit of %d exceeded.', [FMaxNestingDepth]));
+        SetLastError(
+          jeNestingTooDeep,
+          Format('Nesting limit of %d exceeded.', [FMaxNestingDepth])
+        );
       end
       else
       begin
@@ -1794,8 +1867,9 @@ begin
     end;
     jtUnknown:
     begin
-      // In JSON5, unquoted keys should match the JS identifier syntax, i.e. start
-      // with a letter or $ or _, but we allow other characters here to reduce code complexity.
+      // In JSON5, unquoted keys should match the JS identifier syntax, i.e.
+      // start with a letter or $ or _, but we allow other characters here to
+      // reduce code complexity.
       if (jfJson5 in FFeatures) and not (FBuf[FPos] in [#0..#32]) then
       begin
         FState := jnKey;
@@ -2068,16 +2142,15 @@ var
   i: SizeInt;
   Written: LongInt;
   _Buf: TJsonCharArray absolute Buf;
-  //Ptr: PByte;
 begin
   i := 0;
-  //Ptr := @Buf;
   while i < BufSize do
   begin
     Written := FStream.Write(_Buf[i], BufSize - i);
     if Written <= 0 then
-      raise EStreamError.CreateFmt('Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]);
-    //inc(Ptr, Written);
+      raise EStreamError.CreateFmt(
+        'Expected to write %d bytes, but only wrote %d bytes.', [BufSize, i]
+      );
     Inc(i, Written);
   end;
 end;
@@ -2092,7 +2165,6 @@ const
 var
   Escaped: array[0 .. EntitySize * ChunkSize - 1] of TJsonChar;
   i, j, o, n: SizeInt;
-  //c: PChar;
   _Buf: TJsonCharArray absolute Buf;
 begin
   if not FWritingString then
@@ -2117,7 +2189,6 @@ begin
   end;
 
   i := 0;
-  //c := PChar(@Buf);
 
   while i < BufSize do
   begin
@@ -2131,15 +2202,15 @@ begin
       if _Buf[i] in ['\', '"'] then
       begin
         Escaped[o] := '\';
-        Escaped[o+1] := _Buf[i];//c^;
+        Escaped[o+1] := _Buf[i];
         Inc(o, 2);  
         Inc(i);
-        //Inc(c);
       end
-      else if ({c^}_Buf[i] in [#10, #13]) or (({c^}_Buf[i] in [#0..#31]) and not (jfJson5 in FFeatures)) then
+      else if (_Buf[i] in [#10, #13]) or
+              ((_Buf[i] in [#0..#31]) and not (jfJson5 in FFeatures)) then
       begin
         Escaped[o] := '\';
-        case {c^}_Buf[i] of
+        case _Buf[i] of
           #08: begin Escaped[o+1] := 'b'; Inc(o, 2); end;
           #12: begin Escaped[o+1] := 'f'; Inc(o, 2); end;
           #10: begin Escaped[o+1] := 'n'; Inc(o, 2); end;
@@ -2150,20 +2221,18 @@ begin
             Escaped[o+1] := 'u';
             Escaped[o+2] := '0';
             Escaped[o+3] := '0';
-            Escaped[o+4] :=  HexDigits[Ord({c^}_Buf[i]) shr 4];
-            Escaped[o+5] :=  HexDigits[Ord({c^}_Buf[i]) and $f];
+            Escaped[o+4] :=  HexDigits[Ord(_Buf[i]) shr 4];
+            Escaped[o+5] :=  HexDigits[Ord(_Buf[i]) and $f];
             Inc(o, 6);
           end;
         end;   
         Inc(i);
-        //Inc(c);
       end
       else
       begin
-        Escaped[o] := {c^}_Buf[i];
+        Escaped[o] := _Buf[i];
         Inc(o);
         Inc(i);
-        //Inc(c);
       end;
     end;
 
@@ -2327,7 +2396,10 @@ begin
   fs.DecimalSeparator := '.';
 
   if (IsNan(Num) or IsInfinite(Num)) and not (jfJson5 in FFeatures) then
-    raise EJsonWriterUnsupportedValue.Create('The values NaN and +/-Inf are not supported by the JSON standard. (Add jfJson5 to Features to be able to use them)');
+    raise EJsonWriterUnsupportedValue.Create(
+      'The values NaN and +/-Inf are not supported by the JSON standard. ' +
+      '(Add jfJson5 to Features to be able to use them)'
+    );
 
   WriteSeparator;
 

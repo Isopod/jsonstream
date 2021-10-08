@@ -3,97 +3,15 @@ program jsonecho;
 uses
   sysutils, classes, iostream, jsonstream;
 
-function ReadValue: Boolean; forward;
-
-type
-  TTestCase = record
-    Input: String;
-  end;
-
 var
   InStream, OutStream: TStream;
   Reader: TJsonReader;
   Writer: TJsonWriter;
-  i: integer;
 
-  AbortOnFirstError: Boolean = true;
-  NestingDepth: integer = MaxInt;
-  Features: TJsonFeatures;
-
-const
-  samples: array of TTestCase = (
-   (Input:
-      '[' +
-        '{' +
-          '"name":"Alan Turing",' +
-          '"profession":"computer scientist",' +
-          '"born":1912,' +
-          '"died":1954,' +
-          '"tags": ["turing machine", "cryptography", "enigma", "computability"]' +
-        '},' +
-        '{' +
-          '"name":"Kurt Gödel", ' +
-          '"profession": "mathematician", ' +
-          '"born":1906,' +
-          '"died":1978,' +
-          '"tags": ["incompleteness theorem", "set theory", "logic", "philosophy"]' +
-        '},' +
-        '{' +
-          '"name":"Bobby \"\\\"\" Tables",' +
-          '"profession": "troll", ' +
-          '"born": 1970, '+
-          '"died": 2038, '+
-          '"tags": ["escape sequence", "input validation", "sql injection"]' +
-        '}' +
-      ']'),
-    (Input: '["Hello", "World"}'),
-    (Input: '[}'),
-    (Input: '{[], "Foo": "Bar"}'),
-    (Input: '{"garbage": 03.14, "foo": "bar"}'),
-    (Input: '[03.14,3.14]'),
-    (Input: '[1 2]'),
-    (Input: '{"abc" "123"}'),
-    (Input: '{"abc" 123}'),
-    (Input: '{"abc" 123 "a" : "b"}'),
-    (Input: '{123:123,  "a" : "b"}'),
-    (Input: '{123:123,  23 : "b"}'),
-    (Input: '{abc123 : "bcd"}'),
-    (Input: '{123:[123,  23 : "b"}'),
-    (Input: '{123:[123,  23 : "b"]}'),
-    (Input: '{"a":123abc, "c":"d"}'),
-    (Input: '{"123a":, "c":"d"}'),
-    (Input: '{"123a" "c" "d" }'),
-    (Input: '{"a" '),
-    (Input: '{"a", {"b" '),
-    (Input: '{"a", {"b": '),
-    (Input: '{"a", ["b" '),
-    (Input: '{[ '),
-    (Input: '{{} "c":123'),
-    (Input: '{{"b":"a",}, "c":123'),
-    (Input: '{{"b":01}, "c":123'),
-    (Input: '[{"b":"a",} "c",123]'),
-    (Input: '{{"b":"a",} "c":123'),
-    (Input: '{"a", {"b",} "c":123'),
-    (Input: '[0]'),
-    (Input: '{"a":2b3}'),
-    (Input: '{"'),
-    (Input: '{"a":23ueuiaeia232, "b": truefalse, "c": "}'),
-    (Input: '{"a": "b",}'),
-    (Input: '["a",]'),
-    (Input: '[]'),
-    (Input: '{"n": 003.14}'),
-    (Input: '{{123: 321} "c":42}'),
-    (Input: '{"text": "cote \r\naiu e [/code" }'),
-    (Input: '["a]'),
-    (Input: '["\u41"]'),
-    (Input: '"a'#13#10'b"'),
-    (Input: '['#1']'),
-    (Input: '[a'#10'b]'),
-    (Input: '["abc\'#13#10'def\'#10'ghi"]'),
-    (Input: '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]'),
-    (Input: '[-Infinity, 42]')
-  )
-;
+  AbortOnFirstError: Boolean       = true;
+  Pretty:            Boolean       = true;
+  NestingDepth:      integer       = MaxInt;
+  Features:          TJsonFeatures = [];
 
 procedure PutString(const S: string);
 begin
@@ -104,6 +22,8 @@ procedure LogError(const S: string);
 begin
  {WriteLn(ErrOutput, } PutString(LineEnding + S + LineEnding);
 end;
+
+function ReadValue: Boolean; forward;
 
 procedure ReadList;
 begin
@@ -186,7 +106,8 @@ begin
   WriteLn(ErrOutput, 'jsonecho [options]');
   WriteLn(ErrOutput, 'Read a JSON file from standard input, parse it, and print it to standard ' +
                      'output in standardized form, reporting any errors.');
-  WriteLn(ErrOutput, 'Options:');
+  WriteLn(ErrOutput, 'Options:');     
+  WriteLn(ErrOutput, '  --pretty        Pretty-print the output.');
   WriteLn(ErrOutput, '  --json5         Accept JSON5 input, which is a superset of JSON.');
   WriteLn(ErrOutput, '  --stubborn      Try to fix syntax errors and continue parsing, instead of aborting on the first error.');
   WriteLn(ErrOutput, '  --max-depth <n> Maximum nesting depth (of lists and dicts). If this depth is exceeded, parsing is aborted.');
@@ -200,7 +121,9 @@ begin
   i := 1;
   while i <= ParamCount do
   begin
-    if ParamStr(i) = '--json5' then
+    if ParamStr(i) = '--pretty' then
+      Pretty := true
+    else if ParamStr(i) = '--json5' then
       Features := Features + [jfJson5]
     else if ParamStr(i) = '--stubborn' then
       AbortOnFirstError := false
@@ -213,30 +136,6 @@ begin
 end;
 
 begin
-  {$if 1}
-  AbortOnFirstError := false;
-  Features := [{jfJSON5}];
-  OutStream := TIOStream.Create(iosOutPut);
-  for i := low(samples) to high(samples) do
-  begin 
-    InStream := nil;
-    Reader := nil;
-    Writer := nil;
-    PutString(Format('%s => ' + LineEnding, [samples[i].Input]));
-    try
-      InStream := TStringStream.Create(samples[i].Input);
-      Reader := TJsonReader.Create(InStream, Features, NestingDepth);
-      Writer := TJsonWriter.Create(OutStream, Features);
-      ReadValue;
-    finally
-      FreeAndNil(InStream);
-      FreeAndNil(Reader);
-      FreeAndNil(Writer);
-    end;
-    PutString(LineEnding);
-  end;
-  FreeAndNil(OutStream);
-  {$else}
   ParseOptions;
 
   InStream := nil;
@@ -247,7 +146,7 @@ begin
     InStream := TIOStream.Create(iosInput);
     OutStream := TIOStream.Create(iosOutPut);
     Reader := TJsonReader.Create(InStream, Features, NestingDepth);
-    Writer := TJsonWriter.Create(OutStream, Features);
+    Writer := TJsonWriter.Create(OutStream, Features, Pretty);
     ReadValue;
   finally                  
     FreeAndNil(Reader);
@@ -255,5 +154,4 @@ begin
     FreeAndNil(InStream);
     FreeAndNil(OutStream);
   end;
-  {$endif}
 end.
