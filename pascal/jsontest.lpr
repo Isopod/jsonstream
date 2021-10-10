@@ -97,7 +97,7 @@ var
 
   i: integer;
 const
-  sample = 
+  sample =
     '{'#13#10 +
       '"abc" : ['#13#10+
         '{"nest":'#13#10 +
@@ -364,14 +364,14 @@ begin
 
     Reader.Skip;
 
-    Reader.Advance;    
+    Reader.Advance;
 
     AssertTrue(Reader.Number(num));
     AssertTrue(num = 6);
 
     AssertTrue(Reader.Advance = jnListEnd);
     AssertTrue(Reader.Advance = jnEOF);
-  finally   
+  finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
   end;
@@ -402,7 +402,7 @@ begin
 
     AssertTrue(Reader.Dict);
 
-    Reader.Skip;  
+    Reader.Skip;
 
     AssertTrue(Reader.Advance = jnError);
 
@@ -414,7 +414,7 @@ begin
 
     AssertTrue(Reader.Advance = jnListEnd);
     AssertTrue(Reader.Advance = jnEOF);
-  finally   
+  finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
   end;
@@ -789,21 +789,53 @@ begin
   end;
 end;
 
-procedure TestSamples;
 type
-  TTestCase = record
-    Input: String;
-    Output: String;
+  TExpectedError = record
+    Pos: integer;
+    Err: TJsonError;
   end;
 
+procedure TestSample(
+  const Input: string;
+  const Expected: string;
+  Features: TJsonFeatures;
+  Errors: array of TExpectedError;
+  Stubborn: Boolean = true
+);
 var
   InStream, OutStream: TStream;
   Reader: TJsonReader;
   Writer: TJsonWriter;
   Actual: String;
-  i: integer;
+  ErrIdx: integer;
 
   function ReadValue: Boolean; forward;
+
+  procedure CheckError;
+  begin
+
+    if ErrIdx > High(Errors) then
+      AssertTrue(false,
+        Format(
+          'Unexpected error: %d (%s) at %d.', [
+            Integer(Reader.LastError), Reader.LastErrorMessage, Reader.LastErrorPosition
+          ]
+        )
+      )
+    else
+      AssertTrue(
+        (Reader.LastError = Errors[ErrIdx].Err) and
+        (Reader.LastErrorPosition = Errors[ErrIdx].Pos),
+        Format(
+          'Expected %d at %d, but got %d at %d (%s). ', [
+            Errors[ErrIdx].Err, Errors[ErrIdx].Pos ,
+            Integer(Reader.LastError), Reader.LastErrorPosition, Reader.LastErrorMessage
+          ]
+        )
+      );
+
+    Inc(ErrIdx);
+  end;
 
   procedure ReadList;
   begin
@@ -829,7 +861,8 @@ var
         end
         else if Reader.Error then
         begin
-          if Reader.Proceed then
+          CheckError;
+          if Stubborn and Reader.Proceed then
             continue;
         end;
         break;
@@ -866,195 +899,472 @@ var
         Writer.Null
       else if Reader.Bool(bool) then
         Writer.Bool(bool)
-      else if Reader.Error then
+      else if Reader.Error and Stubborn then
       begin
+        CheckError;
         if Reader.Proceed then
           continue;
       end;
       break;
     until false;
   end;
-
-const
-  samples: array of TTestCase = (
-     (Input:
-        '[' +
-          '{' +
-            '"name":"Alan Turing",' +
-            '"profession":"computer scientist",' +
-            '"born":1912,' +
-            '"died":1954,' +
-            '"tags": ["turing machine", "cryptography", "enigma", "computability"]' +
-          '},' +
-          '{' +
-            '"name":"Kurt Gödel", ' +
-            '"profession": "mathematician", ' +
-            '"born":1906,' +
-            '"died":1978,' +
-            '"tags": ["incompleteness theorem", "set theory", "logic", "philosophy"]' +
-          '},' +
-          '{' +
-            '"name":"Bobby \"\\\"\" Tables",' +
-            '"profession": "troll", ' +
-            '"born": 1970, '+
-            '"died": 2038, '+
-            '"tags": ["escape sequence", "input validation", "sql injection"]' +
-          '}' +
-        ']';
-       Output:
-        '[' +
-          '{' +
-            '"name":"Alan Turing",' +
-            '"profession":"computer scientist",' +
-            '"born":1912,' +
-            '"died":1954,' +
-            '"tags":["turing machine","cryptography","enigma","computability"]' +
-          '},' +
-          '{' +
-            '"name":"Kurt Gödel",' +
-            '"profession":"mathematician",' +
-            '"born":1906,' +
-            '"died":1978,' +
-            '"tags":["incompleteness theorem","set theory","logic","philosophy"]' +
-          '},' +
-          '{' +
-            '"name":"Bobby \"\\\"\" Tables",' +
-            '"profession":"troll",' +
-            '"born":1970,'+
-            '"died":2038,'+
-            '"tags":["escape sequence","input validation","sql injection"]' +
-          '}' +
-        ']'
-      ),
-      (Input:  '["Hello", "World"}';
-       Output: '["Hello","World"]'),
-      (Input:  '[}';
-       Output: '[]'),
-      (Input:  '{[], "Foo": "Bar"}';
-       Output: '{"Foo":"Bar"}'),
-      (Input:  '{"garbage": 03.14, "foo": "bar"}';
-       Output: '{"garbage":3.14,"foo":"bar"}'),
-      (Input:  '[03.14,3.14]';
-       Output: '[3.14,3.14]'),
-      (Input:  '[1 2]';
-       Output: '[1,2]'),
-      (Input:  '{"abc" "123"}';
-       Output: '{"abc":null,"123":null}'),
-      (Input:  '{"abc" 123}';
-       Output: '{"abc":null,"123":null}'),
-      (Input:  '{"abc" 123 "a" : "b"}';
-       Output: '{"abc":null,"123":null,"a":"b"}'),
-      (Input:  '{123:123,  "a" : "b"}';
-       Output: '{"123":123,"a":"b"}'),
-      (Input:  '{123:123,  23 : "b"}';
-       Output: '{"123":123,"23":"b"}'),
-      (Input:  '{abc123 : "bcd"}';
-       Output: '{"abc123":"bcd"}'),
-      (Input:  '{123:[123,  23 : "b"}';
-       Output: '{"123":[123,23,"b"]}'),
-      (Input:  '{123:[123,  23 : "b"]}';
-       Output: '{"123":[123,23,"b"]}'),
-      (Input:  '{"a":123abc, "c":"d"}';
-       Output: '{"a":null,"c":"d"}'),
-      (Input:  '{"123a":, "c":"d"}';
-       Output: '{"123a":null,"c":"d"}'),
-      (Input:  '{"123a" "c" "d" }';
-       Output: '{"123a":null,"c":null,"d":null}'),
-      (Input:  '{"a" ';
-       Output: '{"a":null}'),
-      (Input:  '{"a", {"b" ';
-       Output: '{"a":null}'),
-      (Input:  '{"a", {"b": ';
-       Output: '{"a":null}'),
-      (Input:  '{"a", ["b" ';
-       Output: '{"a":null}'),
-      (Input:  '{[ ';
-       Output: '{}'),
-      (Input:  '{{} "c":123';
-       Output: '{"c":123}'),
-      (Input:  '{["a"], "c":123';
-       Output: '{"c":123}'),
-      (Input:  '{["a",], "c":123';
-       Output: '{"c":123}'),
-      (Input:  '{{"b":"a",} "c":123';
-       Output: '{"c":123}'),
-      (Input:  '{{"b":"a",} "c":123';
-       Output: '{"c":123}'),
-      (Input:  '{"a", {"b",} "c":123';
-       Output: '{"a":null,"c":123}'),
-      (Input:  '[0]';
-       Output: '[0]'),
-      (Input:  '{"a":2b3}';
-       Output: '{"a":null}'),
-      (Input:  '{"';
-       Output: '{"":null}'),
-      (Input:  '{"a":23ueuiaeia232, "b": truefalse, "c": "}';
-       Output: '{"a":null,"b":"truefalse","c":"}"}'),
-      (Input:  '{"a": "b",}';
-       Output: '{"a":"b"}'),
-      (Input:  '["a",]';
-       Output: '["a"]'),
-      (Input:  '[]';
-       Output: '[]'),
-      (Input:  '{"n": 003.14}';
-       Output: '{"n":3.14}'),
-      (Input:  '{{123: 321} "c":42}';
-       Output: '{"c":42}'),
-      (Input:  '{"text": "cote \r\naiu e [/code" }';
-       Output: '{"text":"cote \r\naiu e [/code"}'),
-      (Input:  '["a]';
-       Output: '["a]"]'),
-      (Input:  '["\u41"]';
-       Output: '["A"]'),
-      (Input:  '"a'#13#10'b"';
-       Output: '"a\r\nb"'),
-      (Input:  '['#1']';
-       Output: '[]'),
-      (Input:  '[a'#10'b]';
-       Output: '["a","b"]'),
-      (Input:  '["abc\'#13#10'def\'#10'ghi"]';
-       Output: '["abc\\\r\ndef\\\nghi"]'),
-      (Input:  '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]';
-       {Output: '["a", 123.5]')} // JSON5 mode
-       Output: '["a","/*hello","*w/orld*/123.5//this","is","a","number"]'),
-      (Input:  '[-Infinity, 42]';
-       Output: '[null,42]'),
-      (Input:  '{"a":-Infinity, "b":42}';
-       Output: '{"a":null,"b":42}')
-    );
 begin
-  for i := low(samples) to high(samples) do
-  begin
-    InStream := nil;
-    OutStream := nil;
-    Reader := nil;
-    Writer := nil;
-    try
-      InStream := TStringStream.Create(samples[i].Input);
-      OutStream := TMemoryStream.Create;
-      Reader := TJsonReader.Create(InStream);
-      Writer := TJsonWriter.Create(OutStream);
+  InStream := nil;
+  OutStream := nil;
+  Reader := nil;
+  Writer := nil;
+  ErrIdx := 0;
+  try
+    InStream := TStringStream.Create(Input);
+    OutStream := TMemoryStream.Create;
+    Reader := TJsonReader.Create(InStream, Features);
+    Writer := TJsonWriter.Create(OutStream);
 
-      ReadValue;
+    ReadValue;
 
-      SetString(
-        Actual, TMemoryStream(OutStream).Memory, TMemoryStream(OutStream).Size
-      );
+    SetString(
+      Actual, TMemoryStream(OutStream).Memory, TMemoryStream(OutStream).Size
+    );
+    AssertTrue(
+      Actual = Expected,
+      Format(
+        LineEnding + 'Expected: %s' +
+        LineEnding + 'Got:      %s',
+        [Expected, Actual]
+      )
+    );
+
+    if ErrIdx < Length(Errors) then
+    begin
       AssertTrue(
-        Actual = samples[i].Output,
+        false,
         Format(
-          LineEnding + 'Expected: %s' +
-          LineEnding + 'Got:      %s',
-          [samples[i].Output, Actual]
+          'Expected %d errors, got only %d. First missing error: %d at %d.',
+          [
+            Length(Errors), ErrIdx, Errors[High(Errors)].Err, Errors[High(Errors)].Pos
+          ]
         )
       );
-    finally
-      FreeAndNil(InStream); 
-      FreeAndNil(OutStream);
-      FreeAndNil(Reader);
-      FreeAndNil(Writer);
     end;
+  finally
+    FreeAndNil(InStream);
+    FreeAndNil(OutStream);
+    FreeAndNil(Reader);
+    FreeAndNil(Writer);
   end;
+end;
+
+procedure TestSamples;
+  function E(Pos: integer; Err: TJsonError): TExpectedError;
+  begin
+    Result.Pos := Pos;
+    Result.Err := Err;
+  end;
+
+begin
+  TestSample(
+    '[' +
+      '{' +
+        '"name":"Alan Turing",' +
+        '"profession":"computer scientist",' +
+        '"born":1912,' +
+        '"died":1954,' +
+        '"tags": ["turing machine", "cryptography", "enigma", "computability"]' +
+      '},' +
+      '{' +
+        '"name":"Kurt Gödel", ' +
+        '"profession": "mathematician", ' +
+        '"born":1906,' +
+        '"died":1978,' +
+        '"tags": ["incompleteness theorem", "set theory", "logic", "philosophy"]' +
+      '},' +
+      '{' +
+        '"name":"Bobby \"\\\"\" Tables",' +
+        '"profession": "troll", ' +
+        '"born": 1970, '+
+        '"died": 2038, '+
+        '"tags": ["escape sequence", "input validation", "sql injection"]' +
+      '}' +
+    ']',
+    '[' +
+      '{' +
+        '"name":"Alan Turing",' +
+        '"profession":"computer scientist",' +
+        '"born":1912,' +
+        '"died":1954,' +
+        '"tags":["turing machine","cryptography","enigma","computability"]' +
+      '},' +
+      '{' +
+        '"name":"Kurt Gödel",' +
+        '"profession":"mathematician",' +
+        '"born":1906,' +
+        '"died":1978,' +
+        '"tags":["incompleteness theorem","set theory","logic","philosophy"]' +
+      '},' +
+      '{' +
+        '"name":"Bobby \"\\\"\" Tables",' +
+        '"profession":"troll",' +
+        '"born":1970,'+
+        '"died":2038,'+
+        '"tags":["escape sequence","input validation","sql injection"]' +
+      '}' +
+    ']',
+    [], []
+  );
+
+  TestSample(
+    '["Hello", "World"}',
+    '["Hello","World"]',
+    [], [E(17, jeUnexpectedToken), E(18, jeUnexpectedEOF)]
+  );
+  TestSample(
+    '[}',
+    '[]',
+    [], [E(1, jeUnexpectedToken), E(2, jeUnexpectedEOF)]
+  );
+  TestSample(
+    '{[], "Foo": "Bar"}',
+    '{"Foo":"Bar"}',
+    [], [E(1, jeUnexpectedToken)]
+  );
+  TestSample(
+    '{"garbage": 03.14, "foo": "bar"}',
+    '{"garbage":3.14,"foo":"bar"}',
+    [], [E(13, jeInvalidNumber)]
+  );
+  TestSample(
+    '[03.14,3.14]',
+    '[3.14,3.14]',
+    [], [E(2, jeInvalidNumber)]
+  );
+  TestSample(
+    '[1 2]',
+    '[1,2]',
+    [], [E(3, jeUnexpectedToken) ]
+  );
+  TestSample(
+    '{"abc" "123"}',
+    '{"abc":null,"123":null}',
+    [], [
+      E(7,  jeUnexpectedToken) { Expected colon },
+      E(7,  jeUnexpectedToken) { Expected comma },
+      E(12, jeUnexpectedToken) { Expected colon }
+    ]
+  );
+  TestSample(
+    '{"abc" 123}',
+    '{"abc":null,"123":null}',
+    [], [
+      E(7,  jeUnexpectedToken) { Expected colon },
+      E(7,  jeUnexpectedToken) { Expected comma },
+      E(7,  jeUnexpectedToken) { Expected key },
+      E(10, jeUnexpectedToken) { Expected colon }
+    ]
+  );
+  TestSample(
+    '{"abc" 123 "a" : "b"}',
+    '{"abc":null,"123":null,"a":"b"}',
+    [], [
+      E(7,  jeUnexpectedToken) { Expected colon },
+      E(7,  jeUnexpectedToken) { Expected comma },
+      E(7,  jeUnexpectedToken) { Expected key },
+      E(11, jeUnexpectedToken) { Expected colon },
+      E(11, jeUnexpectedToken) { Expected comma }
+    ]
+  );
+  TestSample(
+    '{123:123,  "a" : "b"}',
+    '{"123":123,"a":"b"}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key }
+    ]
+  );
+  TestSample(
+    '{123:123,  23 : "b"}',
+    '{"123":123,"23":"b"}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },
+      E(11, jeUnexpectedToken) { Expected key }
+    ]
+  );
+  TestSample(
+    '{abc123 : "bcd"}',
+    '{"abc123":"bcd"}',
+    [], [
+      E(1,  jeInvalidToken) { Expected key }
+    ]
+  );
+  TestSample(
+    '{123:[123,  23 : "b"}',
+    '{"123":[123,23,"b"]}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },
+      E(15, jeUnexpectedToken) { Expected comma },
+      E(17, jeUnexpectedToken) { Expected comma },
+      E(20, jeUnexpectedToken) { Expected list end }
+    ]
+  );
+  TestSample(
+    '{123:[123,  23 : "b"]}',
+    '{"123":[123,23,"b"]}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },
+      E(15, jeUnexpectedToken) { Expected comma },
+      E(17, jeUnexpectedToken) { Expected comma }
+    ]
+  );
+  TestSample(
+    '{"a":123abc, "c":"d"}',
+    '{"a":null,"c":"d"}',
+    [], [E(8, jeInvalidToken)]
+  );
+  TestSample(
+    '{"123a":, "c":"d"}',
+    '{"123a":null,"c":"d"}',
+    [], [E(8, jeUnexpectedToken)]
+  );
+  TestSample(
+    '{"123a" "c" "d" }',
+    '{"123a":null,"c":null,"d":null}',
+    [], [
+      E(8,  jeUnexpectedToken) { Expected colon },
+      E(8,  jeUnexpectedToken) { Expected comma },
+      E(12, jeUnexpectedToken) { Expected colon },
+      E(12, jeUnexpectedToken) { Expected comma },
+      E(16, jeUnexpectedToken) { Expected colon }
+    ]
+  );
+  TestSample(
+    '{"a" ',
+    '{"a":null}',
+    [], [
+      E(5,  jeUnexpectedEOF) { Expected colon },
+      E(5,  jeUnexpectedEOF) { Expected dict-end }
+    ]
+  );
+  TestSample(
+    '{"a", {"b" ',
+    '{"a":null}',
+    [], [
+      E(4,  jeUnexpectedToken) { Expected colon },  
+      E(6,  jeUnexpectedToken) { Expected key },
+      E(11, jeUnexpectedEOF)   { Expected colon },
+      E(11, jeUnexpectedEOF)   { Expected dict-end }(*,
+      E(11, jeUnexpectedEOF)   { Expected dict-end }*)
+    ]
+  );
+  TestSample(
+    '{"a", {"b": ',
+    '{"a":null}',
+    [], [
+      E(4,  jeUnexpectedToken) { Expected colon },
+      E(6,  jeUnexpectedToken) { Expected key },
+      E(12, jeUnexpectedEOF)   { Expected value },
+      E(12, jeUnexpectedEOF)   { Expected dict-end }(*,
+      E(12, jeUnexpectedEOF)   { Expected dict-end }*)
+    ]
+  );
+  TestSample(
+    '{"a", ["b" ',
+    '{"a":null}',
+    [], [
+      E(4,  jeUnexpectedToken) { Expected colon },
+      E(6,  jeUnexpectedToken) { Expected key },
+      E(11, jeUnexpectedEOF)   { Expected list-end }(*,
+      E(11, jeUnexpectedEOF)   { Expected dict-end }*)
+    ]
+  );
+  TestSample(
+    '{[ ',
+    '{}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },
+      E(3,  jeUnexpectedEOF)   { Expected list-end }(*,
+      E(3,  jeUnexpectedEOF)   { Expected dict-end }*)
+    ]
+  );
+  TestSample(
+    '{{} "c":123',
+    '{"c":123}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },   
+      E(4,  jeUnexpectedToken) { Expected comma },
+      E(11, jeUnexpectedEOF)   { Expected dict-end }
+    ]
+  );
+  TestSample(
+    '{["a"], "c":123',
+    '{"c":123}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },
+      E(15, jeUnexpectedEOF)   { Expected dict-end }
+    ]
+  );
+  TestSample(
+    '{["a",], "c":123',
+    '{"c":123}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },
+      E(6,  jeTrailingComma),
+      E(16, jeUnexpectedEOF)   { Expected dict-end }
+    ]
+  );
+  TestSample(
+    '{{"b":"a",} "c":123',
+    '{"c":123}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key } ,
+      E(10, jeTrailingComma),
+      E(12, jeUnexpectedToken) { Expected comma },
+      E(19, jeUnexpectedEOF)   { Expected dict-end }
+    ]
+  );
+  TestSample(
+    '{"a", {"b",} "c":123',
+    '{"a":null,"c":123}',
+    [], [
+      E(4,  jeUnexpectedToken) { Expected colon },
+      E(6,  jeUnexpectedToken) { Expected key },
+      E(10, jeUnexpectedToken) { Expected colon },
+      E(11, jeTrailingComma),
+      E(13, jeUnexpectedToken) { Expected comma },
+      E(20, jeUnexpectedEOF)   { Expected dict-end }
+    ]
+  );
+  TestSample(
+    '[0]',
+    '[0]',
+    [], []
+  );
+  TestSample(
+    '{"a":2b3}',
+    '{"a":null}',
+    [], [E(6, jeInvalidToken)]
+  );
+  TestSample(
+    '{"',
+    '{"":null}',
+    [], [
+      E(2,  jeUnexpectedEOF) { Expected string-end },
+      E(2,  jeUnexpectedEOF) { Expected colon },
+      E(2,  jeUnexpectedEOF) { Expected value }(*,
+      E(2,  jeUnexpectedEOF) { Expected dict-end }*)
+    ]
+  );
+  TestSample(
+    '{"a":23ueuiaeia232, "b": truefalse, "c": "}',
+    '{"a":null,"b":"truefalse","c":"}"}',
+    [], [
+      E(7,  jeInvalidToken),
+      E(25, jeInvalidToken)  { Expected value },
+      E(43, jeUnexpectedEOF) { Expected string-end },
+      E(43, jeUnexpectedEOF) { Expected dict-end }
+    ]
+  );
+  TestSample(
+    '{"a": "b",}',
+    '{"a":"b"}',
+    [], [E(10, jeTrailingComma)]
+  );
+  TestSample(
+    '["a",]',
+    '["a"]',
+    [], [E(5, jeTrailingComma)]
+  );
+  TestSample(
+    '[]',
+    '[]',
+    [], []
+  );
+  TestSample(
+    '{"n": 003.14}',
+    '{"n":3.14}',
+    [], [E(8, jeInvalidNumber)]
+  );
+  TestSample(
+    '{{123: 321} "c":42}',
+    '{"c":42}',
+    [], [
+      E(1,  jeUnexpectedToken) { Expected key },
+      E(2,  jeUnexpectedToken) { Expected key },
+      E(12, jeUnexpectedToken) { Expected comma }
+    ]
+  );
+  TestSample(
+    '{"text": "cote \r\naiu e [/code" }',
+    '{"text":"cote \r\naiu e [/code"}',
+    [], []
+  );
+  TestSample(
+    '["a]',
+    '["a]"]',
+    [], [
+      E(4, jeUnexpectedEOF) { Expected string end },
+      E(4, jeUnexpectedEOF) { Expected list end }
+    ]
+  );
+  TestSample(
+    '["\u0041"]',
+    '["A"]',
+    [], []
+  );
+  TestSample(
+    '["\u41"]',
+    '["A"]',
+    [], [E(2, jeInvalidEscapeSequence)]
+  );
+  TestSample(
+    '"a'#13#10'b"',
+    '"a\r\nb"',
+    [], [E(2, jeInvalidEscapeSequence),E(3, jeInvalidEscapeSequence)]
+  );
+  TestSample(
+    '['#1']',
+    '[]',
+    [], [E(1,  jeInvalidToken)]
+  );
+  TestSample(
+    '[a'#10'b]',
+    '["a","b"]',
+    [], [E(1, jeInvalidToken), E(3, jeInvalidToken)]
+  );
+  TestSample(
+    '["abc\'#13#10'def\'#10'ghi"]',
+    '["abc\\\r\ndef\\\nghi"]',
+    [], [
+      E(5, jeInvalidEscapeSequence), E(7, jeInvalidEscapeSequence),
+      E(11, jeInvalidEscapeSequence)
+    ]
+  );
+  TestSample(
+    '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]',
+    '["a","/*hello","*w/orld*/123.5//this","is","a","number"]',
+    [], [
+      E(1,  jeInvalidToken) { ' instead of " },
+      E(6,  jeInvalidToken) { /* },
+      E(14, jeInvalidToken) { */ },
+      E(35, jeInvalidToken) { is },
+      E(38, jeInvalidToken) { a },
+      E(40, jeInvalidToken) { number }
+    ]
+  );
+  TestSample(
+    '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]',
+    '["a",123.5]',
+    [jfJson5], [
+      E(47, jeUnexpectedEOF) { expected list end }
+    ]
+  );
+  TestSample(
+    '[-Infinity, 42]',
+    '[null,42]',
+    [], [E(2, jeInvalidToken)]
+  );
+  TestSample(
+    '{"a":-Infinity, "b":42}',
+    '{"a":null,"b":42}',
+    [], [E(6, jeInvalidToken)]
+  );
 end;
 
 begin
@@ -1075,4 +1385,7 @@ begin
   TestKeyBuf;
   TestSamples;
 end.
+
+
+
 

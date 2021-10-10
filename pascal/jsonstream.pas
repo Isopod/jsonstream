@@ -34,8 +34,7 @@ type
     jeInvalidToken,
     jeInvalidNumber,
     jeUnexpectedToken,
-    jeUnexpectedListEnd,
-    jeUnexpectedDictEnd,
+    jeTrailingComma,
     jeUnexpectedEOF,
     jeInvalidEscapeSequence,
     jeNestingTooDeep
@@ -508,20 +507,19 @@ end;
 
 procedure TJsonReader.SkipString;
 var
-  dummy: TJsonString;
+  Buf: array[0..1024] of TJsonChar;
+  n: SizeInt;
 begin
-  // TODO: Be more efficient. We don't actually care about the string so we
-  // should not allocate it.
-  Str(dummy);
+  repeat
+    n := StrBufInternal(Buf, sizeof(Buf));
+  until n <= 0;
+
+  FSkip := false;
 end;
 
 procedure TJsonReader.SkipKey;
-var
-  dummy: TJsonString;
-begin    
-  // TODO: Be more efficient. We don't actually care about the string so we
-  // should not allocate it.
-  Key(dummy);
+begin
+  SkipString;
 end;
 
 const
@@ -1047,7 +1045,7 @@ begin
           begin
             FState := jnError;
             SetLastError(
-              jeUnexpectedListEnd,
+              jeTrailingComma,
               'Trailing comma before end of list.'
             );
             StackPush(jsError);
@@ -1101,7 +1099,7 @@ begin
           begin
             FState := jnError;
             SetLastError(
-              jeUnexpectedDictEnd,
+              jeTrailingComma,
               'Trailing comma before end of dict.'
             );
             StackPush(jsError);
