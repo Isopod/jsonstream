@@ -33,7 +33,6 @@ begin
     begin
       Reader.Advance;
       AssertTrue(Reader.Number(num));
-      WriteLn(num);
       assert(num = i);
     end;
 
@@ -73,7 +72,6 @@ begin
       AssertTrue(Reader.Key(str));
       AssertTrue(str = keys[i]);
       AssertTrue(Reader.Number(num));
-      WriteLn(str, '=', num);
       AssertTrue(num = i);
     end;
 
@@ -918,7 +916,7 @@ begin
     InStream := TStringStream.Create(Input);
     OutStream := TMemoryStream.Create;
     Reader := TJsonReader.Create(InStream, Features);
-    Writer := TJsonWriter.Create(OutStream);
+    Writer := TJsonWriter.Create(OutStream, Features);
 
     ReadValue;
 
@@ -1360,11 +1358,26 @@ begin
     '[null,42]',
     [], [E(2, jeInvalidToken)]
   );
+
   TestSample(
     '{"a":-Infinity, "b":42}',
     '{"a":null,"b":42}',
     [], [E(6, jeInvalidToken)]
   );
+
+  TestSample(
+    '[0xcafe, .123, 123., ''a"b\''c'', "a\'#13#10'b", {key: "value",},]',
+    '[51966,0.123,123,"a\"b''c","a\r\nb",{"key":"value"}]',
+    [jfJson5], []
+  );
+
+  TestSample(
+    '{NaN: NaN, Infinity: Infinity, "+Infinity": +Infinity, "-Infinity": -Infinity}',
+    '{"NaN":NaN,"Infinity":Infinity,"+Infinity":Infinity,"-Infinity":-Infinity}',
+    [jfJson5], []
+  );
+
+  // Add separate parameter to TestSample for non-stubborn version
 end;
 
 begin

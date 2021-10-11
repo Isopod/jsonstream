@@ -713,8 +713,9 @@ begin
     begin
       Inc(FPos);
       RefillBuffer;
-      // JSON requires digit after decimal point
-      if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
+      // JSON (but not JSON5) requires digit after decimal point
+      if ((FLen < 0) or not (FBuf[FPos] in ['0'..'9'])) and
+         not (jfJson5 in FFeatures) then
       begin
         FNumberErr := true; 
         SetLastError(jeInvalidNumber, 'Expected digit after decimal point.');
@@ -1609,14 +1610,15 @@ begin
         // Number of consumed input characters (usually 2)
         n := 2;
         case FBuf[FPos + 1] of
-          '"': FEscapeSequence := '"';
-          '\': FEscapeSequence := '\';
-          '/': FEscapeSequence := '/';
-          'b': FEscapeSequence := #08;
-          'f': FEscapeSequence := #12;
-          'n': FEscapeSequence := #10;
-          'r': FEscapeSequence := #13;
-          't': FEscapeSequence := #09;
+          '"':  FEscapeSequence := '"';
+          '''': FEscapeSequence := '''';
+          '\':  FEscapeSequence := '\';
+          '/':  FEscapeSequence := '/';
+          'b':  FEscapeSequence := #08;
+          'f':  FEscapeSequence := #12;
+          'n':  FEscapeSequence := #10;
+          'r':  FEscapeSequence := #13;
+          't':  FEscapeSequence := #09;
           else
           begin
             // JSON5 allows escaping of newline characters (stupid)
@@ -1863,12 +1865,16 @@ begin
         Result := true;
       end
     end;
-    jtUnknown:
+    else
     begin
       // In JSON5, unquoted keys should match the JS identifier syntax, i.e.
       // start with a letter or $ or _, but we allow other characters here to
       // reduce code complexity.
-      if (jfJson5 in FFeatures) and not (FBuf[FPos] in [#0..#32]) then
+      if (jfJson5 in FFeatures) and not (FBuf[FPos] in [
+           #0..#32, '0'..'9', '[', ']', '{', '}', '(', ')', '<', '>',
+           '.', ':', ',', ';', '+', '-', '*', '/', '%', '^', '~', '&', '|',
+           '?', '!', '=', '#'
+         ]) then
       begin
         FState := jnKey;
         StackPush(jsDictKey);
@@ -2403,9 +2409,9 @@ begin
 
   if IsNan(Num) and (jfJson5 in FFeatures) then
     Write('NaN')
-  else if IsInfinite(Num) and (Num < 0) and (jfJson5 in FFeatures) then
-    Write('Infinity')
   else if IsInfinite(Num) and (Num > 0) and (jfJson5 in FFeatures) then
+    Write('Infinity')
+  else if IsInfinite(Num) and (Num < 0) and (jfJson5 in FFeatures) then
     Write('-Infinity')
   else
     Write(FloatToStr(Num, fs));
