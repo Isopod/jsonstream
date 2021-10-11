@@ -793,7 +793,7 @@ type
     Err: TJsonError;
   end;
 
-procedure TestSample(
+procedure _TestSample(
   const Input: string;
   const Expected: string;
   Features: TJsonFeatures;
@@ -811,7 +811,6 @@ var
 
   procedure CheckError;
   begin
-
     if ErrIdx > High(Errors) then
       AssertTrue(false,
         Format(
@@ -855,7 +854,8 @@ var
         if Reader.Key(Key) then
         begin
           Writer.Key(Key);
-          ReadValue;
+          if not ReadValue then
+            Writer.Null;
         end
         else if Reader.Error then
         begin
@@ -897,12 +897,15 @@ var
         Writer.Null
       else if Reader.Bool(bool) then
         Writer.Bool(bool)
-      else if Reader.Error and Stubborn then
+      else if Reader.Error then
       begin
+        Result := false;
         CheckError;
-        if Reader.Proceed then
+        if Stubborn and Reader.Proceed then
           continue;
-      end;
+      end
+      else
+        assert(false);
       break;
     until false;
   end;
@@ -950,6 +953,37 @@ begin
     FreeAndNil(Reader);
     FreeAndNil(Writer);
   end;
+end;
+
+procedure TestSample(
+  const Input: string;
+  const Expected: string;
+  Features: TJsonFeatures;
+  Errors: array of TExpectedError
+);
+begin
+  if Length(Errors) > 0 then
+    _TestSample(Input, Expected, Features, [Errors[0]], false)
+  else
+    _TestSample(Input, Expected, Features, [], false);
+
+  _TestSample(Input, Expected, Features, Errors, true);
+end;
+
+procedure TestSample2(
+  const Input: string;
+  const Expected: string;
+  const ExpectedStubborn: string;
+  Features: TJsonFeatures;
+  Errors: array of TExpectedError
+);
+begin
+  if Length(Errors) > 0 then
+    _TestSample(Input, Expected, Features, [Errors[0]], false)
+  else
+    _TestSample(Input, Expected, Features, [], false);
+
+  _TestSample(Input, ExpectedStubborn, Features, Errors, true);
 end;
 
 procedure TestSamples;
@@ -1020,28 +1054,33 @@ begin
     '[]',
     [], [E(1, jeUnexpectedToken), E(2, jeUnexpectedEOF)]
   );
-  TestSample(
+  TestSample2(
     '{[], "Foo": "Bar"}',
+    '{}',
     '{"Foo":"Bar"}',
     [], [E(1, jeUnexpectedToken)]
   );
-  TestSample(
+  TestSample2(
     '{"garbage": 03.14, "foo": "bar"}',
+    '{"garbage":null}',
     '{"garbage":3.14,"foo":"bar"}',
     [], [E(13, jeInvalidNumber)]
   );
-  TestSample(
+  TestSample2(
     '[03.14,3.14]',
+    '[]',
     '[3.14,3.14]',
     [], [E(2, jeInvalidNumber)]
   );
-  TestSample(
+  TestSample2(
     '[1 2]',
+    '[1]',
     '[1,2]',
     [], [E(3, jeUnexpectedToken) ]
   );
-  TestSample(
+  TestSample2(
     '{"abc" "123"}',
+    '{"abc":null}',
     '{"abc":null,"123":null}',
     [], [
       E(7,  jeUnexpectedToken) { Expected colon },
@@ -1049,8 +1088,9 @@ begin
       E(12, jeUnexpectedToken) { Expected colon }
     ]
   );
-  TestSample(
+  TestSample2(
     '{"abc" 123}',
+    '{"abc":null}',
     '{"abc":null,"123":null}',
     [], [
       E(7,  jeUnexpectedToken) { Expected colon },
@@ -1059,8 +1099,9 @@ begin
       E(10, jeUnexpectedToken) { Expected colon }
     ]
   );
-  TestSample(
+  TestSample2(
     '{"abc" 123 "a" : "b"}',
+    '{"abc":null}',
     '{"abc":null,"123":null,"a":"b"}',
     [], [
       E(7,  jeUnexpectedToken) { Expected colon },
@@ -1070,30 +1111,34 @@ begin
       E(11, jeUnexpectedToken) { Expected comma }
     ]
   );
-  TestSample(
+  TestSample2(
     '{123:123,  "a" : "b"}',
+    '{}',
     '{"123":123,"a":"b"}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key }
     ]
   );
-  TestSample(
+  TestSample2(
     '{123:123,  23 : "b"}',
+    '{}',
     '{"123":123,"23":"b"}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },
       E(11, jeUnexpectedToken) { Expected key }
     ]
   );
-  TestSample(
+  TestSample2(
     '{abc123 : "bcd"}',
+    '{}',
     '{"abc123":"bcd"}',
     [], [
       E(1,  jeInvalidToken) { Expected key }
     ]
   );
-  TestSample(
+  TestSample2(
     '{123:[123,  23 : "b"}',
+    '{}',
     '{"123":[123,23,"b"]}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },
@@ -1102,8 +1147,9 @@ begin
       E(20, jeUnexpectedToken) { Expected list end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{123:[123,  23 : "b"]}',
+    '{}',
     '{"123":[123,23,"b"]}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },
@@ -1111,18 +1157,21 @@ begin
       E(17, jeUnexpectedToken) { Expected comma }
     ]
   );
-  TestSample(
+  TestSample2(
     '{"a":123abc, "c":"d"}',
+    '{"a":null}',
     '{"a":null,"c":"d"}',
     [], [E(8, jeInvalidToken)]
   );
-  TestSample(
+  TestSample2(
     '{"123a":, "c":"d"}',
+    '{"123a":null}',
     '{"123a":null,"c":"d"}',
     [], [E(8, jeUnexpectedToken)]
   );
-  TestSample(
+  TestSample2(
     '{"123a" "c" "d" }',
+    '{"123a":null}',
     '{"123a":null,"c":null,"d":null}',
     [], [
       E(8,  jeUnexpectedToken) { Expected colon },
@@ -1140,26 +1189,26 @@ begin
       E(5,  jeUnexpectedEOF) { Expected dict-end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{"a", {"b" ',
+    '{"a":null}',
     '{"a":null}',
     [], [
       E(4,  jeUnexpectedToken) { Expected colon },  
       E(6,  jeUnexpectedToken) { Expected key },
       E(11, jeUnexpectedEOF)   { Expected colon },
-      E(11, jeUnexpectedEOF)   { Expected dict-end }(*,
-      E(11, jeUnexpectedEOF)   { Expected dict-end }*)
+      E(11, jeUnexpectedEOF)   { Expected dict-end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{"a", {"b": ',
+    '{"a":null}',
     '{"a":null}',
     [], [
       E(4,  jeUnexpectedToken) { Expected colon },
       E(6,  jeUnexpectedToken) { Expected key },
       E(12, jeUnexpectedEOF)   { Expected value },
-      E(12, jeUnexpectedEOF)   { Expected dict-end }(*,
-      E(12, jeUnexpectedEOF)   { Expected dict-end }*)
+      E(12, jeUnexpectedEOF)   { Expected dict-end }
     ]
   );
   TestSample(
@@ -1168,8 +1217,7 @@ begin
     [], [
       E(4,  jeUnexpectedToken) { Expected colon },
       E(6,  jeUnexpectedToken) { Expected key },
-      E(11, jeUnexpectedEOF)   { Expected list-end }(*,
-      E(11, jeUnexpectedEOF)   { Expected dict-end }*)
+      E(11, jeUnexpectedEOF)   { Expected list-end }
     ]
   );
   TestSample(
@@ -1177,12 +1225,12 @@ begin
     '{}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },
-      E(3,  jeUnexpectedEOF)   { Expected list-end }(*,
-      E(3,  jeUnexpectedEOF)   { Expected dict-end }*)
+      E(3,  jeUnexpectedEOF)   { Expected list-end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{{} "c":123',
+    '{}',
     '{"c":123}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },   
@@ -1190,16 +1238,18 @@ begin
       E(11, jeUnexpectedEOF)   { Expected dict-end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{["a"], "c":123',
+    '{}',
     '{"c":123}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },
       E(15, jeUnexpectedEOF)   { Expected dict-end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{["a",], "c":123',
+    '{}',
     '{"c":123}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },
@@ -1207,8 +1257,9 @@ begin
       E(16, jeUnexpectedEOF)   { Expected dict-end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{{"b":"a",} "c":123',
+    '{}',
     '{"c":123}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key } ,
@@ -1217,8 +1268,9 @@ begin
       E(19, jeUnexpectedEOF)   { Expected dict-end }
     ]
   );
-  TestSample(
+  TestSample2(
     '{"a", {"b",} "c":123',
+    '{"a":null}',
     '{"a":null,"c":123}',
     [], [
       E(4,  jeUnexpectedToken) { Expected colon },
@@ -1239,18 +1291,19 @@ begin
     '{"a":null}',
     [], [E(6, jeInvalidToken)]
   );
-  TestSample(
+  TestSample2(
     '{"',
+    '{}',
     '{"":null}',
     [], [
       E(2,  jeUnexpectedEOF) { Expected string-end },
       E(2,  jeUnexpectedEOF) { Expected colon },
-      E(2,  jeUnexpectedEOF) { Expected value }(*,
-      E(2,  jeUnexpectedEOF) { Expected dict-end }*)
+      E(2,  jeUnexpectedEOF) { Expected value }
     ]
   );
-  TestSample(
+  TestSample2(
     '{"a":23ueuiaeia232, "b": truefalse, "c": "}',
+    '{"a":null}',
     '{"a":null,"b":"truefalse","c":"}"}',
     [], [
       E(7,  jeInvalidToken),
@@ -1274,13 +1327,15 @@ begin
     '[]',
     [], []
   );
-  TestSample(
+  TestSample2(
     '{"n": 003.14}',
+    '{"n":null}',
     '{"n":3.14}',
     [], [E(8, jeInvalidNumber)]
   );
-  TestSample(
+  TestSample2(
     '{{123: 321} "c":42}',
+    '{}',
     '{"c":42}',
     [], [
       E(1,  jeUnexpectedToken) { Expected key },
@@ -1293,8 +1348,9 @@ begin
     '{"text":"cote \r\naiu e [/code"}',
     [], []
   );
-  TestSample(
+  TestSample2(
     '["a]',
+    '[]',
     '["a]"]',
     [], [
       E(4, jeUnexpectedEOF) { Expected string end },
@@ -1306,13 +1362,15 @@ begin
     '["A"]',
     [], []
   );
-  TestSample(
+  TestSample2(
     '["\u41"]',
+    '[]',
     '["A"]',
     [], [E(2, jeInvalidEscapeSequence)]
   );
-  TestSample(
+  TestSample2(
     '"a'#13#10'b"',
+    '',
     '"a\r\nb"',
     [], [E(2, jeInvalidEscapeSequence),E(3, jeInvalidEscapeSequence)]
   );
@@ -1321,21 +1379,24 @@ begin
     '[]',
     [], [E(1,  jeInvalidToken)]
   );
-  TestSample(
+  TestSample2(
     '[a'#10'b]',
+    '[]',
     '["a","b"]',
     [], [E(1, jeInvalidToken), E(3, jeInvalidToken)]
   );
-  TestSample(
+  TestSample2(
     '["abc\'#13#10'def\'#10'ghi"]',
+    '[]',
     '["abc\\\r\ndef\\\nghi"]',
     [], [
       E(5, jeInvalidEscapeSequence), E(7, jeInvalidEscapeSequence),
       E(11, jeInvalidEscapeSequence)
     ]
   );
-  TestSample(
+  TestSample2(
     '[''a'', /*hello'#10'*w/orld*/123.5//this is a number]',
+    '[]',
     '["a","/*hello","*w/orld*/123.5//this","is","a","number"]',
     [], [
       E(1,  jeInvalidToken) { ' instead of " },
@@ -1353,14 +1414,16 @@ begin
       E(47, jeUnexpectedEOF) { expected list end }
     ]
   );
-  TestSample(
+  TestSample2(
     '[-Infinity, 42]',
+    '[]',
     '[null,42]',
     [], [E(2, jeInvalidToken)]
   );
 
-  TestSample(
+  TestSample2(
     '{"a":-Infinity, "b":42}',
+    '{"a":null}',
     '{"a":null,"b":42}',
     [], [E(6, jeInvalidToken)]
   );
