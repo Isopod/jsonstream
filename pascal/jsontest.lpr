@@ -992,7 +992,6 @@ procedure TestSamples;
     Result.Pos := Pos;
     Result.Err := Err;
   end;
-
 begin
   TestSample(
     '[' +
@@ -1439,8 +1438,6 @@ begin
     '{"NaN":NaN,"Infinity":Infinity,"+Infinity":Infinity,"-Infinity":-Infinity}',
     [jfJson5], []
   );
-
-  // Add separate parameter to TestSample for non-stubborn version
 end;
 
 begin

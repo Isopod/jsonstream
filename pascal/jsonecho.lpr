@@ -5,22 +5,21 @@ uses
 
 var
   InStream, OutStream: TStream;
-  Reader: TJsonReader;
-  Writer: TJsonWriter;
+  Reader:              TJsonReader;
+  Writer:              TJsonWriter;
 
-  AbortOnFirstError: Boolean       = true;
-  Pretty:            Boolean       = true;
-  NestingDepth:      integer       = MaxInt;
-  Features:          TJsonFeatures = [];
+  Stubborn:            Boolean       = false;
+  Pretty:              Boolean       = true;
+  NestingDepth:        integer       = MaxInt;
+  Features:            TJsonFeatures = [];
 
-procedure PutString(const S: string);
+procedure LogError;
 begin
-  OutStream.Write(S[1], length(S));
-end;
-
-procedure LogError(const S: string);
-begin
- {WriteLn(ErrOutput, } PutString(LineEnding + S + LineEnding);
+  WriteLn(ErrOutput,
+    Format('Error at offset %d: %s', [
+      Reader.LastErrorPosition, Reader.LastErrorMessage
+    ])
+  );
 end;
 
 function ReadValue: Boolean; forward;
@@ -49,8 +48,8 @@ begin
       end
       else if Reader.Error then
       begin
-        LogError(Format('ERROR: %s', [Reader.LastErrorMessage]));
-        if not AbortOnFirstError and Reader.Proceed then
+        LogError;
+        if Stubborn and Reader.Proceed then
           continue;
       end;
       break;
@@ -90,8 +89,8 @@ begin
     else if Reader.Error then
     begin
       Result := false;
-      LogError(Format('ERROR: %s', [Reader.LastErrorMessage]));
-      if not AbortOnFirstError and Reader.Proceed then
+      LogError;
+      if Stubborn and Reader.Proceed then
         continue;
     end
     else
@@ -126,7 +125,7 @@ begin
     else if ParamStr(i) = '--json5' then
       Features := Features + [jfJson5]
     else if ParamStr(i) = '--stubborn' then
-      AbortOnFirstError := false
+      Stubborn := true
     else if (ParamStr(i) = '--max-depth') and TryStrToInt(ParamStr(i+1), NestingDepth) then
       Inc(i)
     else
@@ -138,15 +137,15 @@ end;
 begin
   ParseOptions;
 
-  InStream := nil;
+  InStream  := nil;
   OutStream := nil;
-  Reader := nil;
-  Writer := nil;
+  Reader    := nil;
+  Writer    := nil;
   try
-    InStream := TIOStream.Create(iosInput);
+    InStream  := TIOStream.Create(iosInput);
     OutStream := TIOStream.Create(iosOutPut);
-    Reader := TJsonReader.Create(InStream, Features, NestingDepth);
-    Writer := TJsonWriter.Create(OutStream, Features, Pretty);
+    Reader    := TJsonReader.Create(InStream, Features, NestingDepth);
+    Writer    := TJsonWriter.Create(OutStream, Features, Pretty);
     ReadValue;
   finally                  
     FreeAndNil(Reader);
