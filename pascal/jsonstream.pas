@@ -1906,7 +1906,7 @@ begin
   Result := StrInternal(K);
   FSkip  := false;
   if FState <> jnError then
-    InternalAdvance;
+    Advance;
 end;
 
 function TJsonReader.KeyBuf(out Buf; BufSize: SizeInt): SizeInt;
@@ -1921,7 +1921,7 @@ begin
   FSkip  := false;
 
   if (Result = 0) and (BufSize > 0) then
-    InternalAdvance;
+    Advance;
 end;
 
 function TJsonReader.Str(out S: TJsonString): Boolean;
