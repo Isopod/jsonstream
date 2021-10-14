@@ -1,0 +1,61 @@
+{
+	"name": "World",
+	"population": 7795000000,
+	"children": [
+		{
+			"name": "Europe",
+			"population": 746419440,
+			"children": [
+				{
+					"name": "Germany",
+					"population": 83155031,
+					"children": [
+						{ "name": "Schleswig-Holstein", "population": 2910875 },
+						{ "name": "Mecklenburg-Vorpommern", "population": 1610774},
+						{ "name": "Lower Saxony", "population": 8003421 },
+						{ "name": "Bremen", "population": 680130 },
+						{ "name": "Hamburg", "population": 1851430 },
+						{ "name": "Berlin", "population": 3664088 },
+						{ "name": "Brandenburg", "population": 2531071 },
+						{ "name": "North Rhine-Westphalia", "population": 17925570 },
+						{ "name": "Saxony", "population": 4056941 },
+						{ "name": "Saxony-Anhalt", "population": 2180984 },
+						{ "name": "Thuringia", "population": 2120237 },
+						{ "name": "Hesse", "population": 6293154 },
+						{ "name": "Rhineland-Palatinate", "population": 4098391 },
+						{ "name": "Saarland", "population": 983991 },
+						{ "name": "Baden-Württemberg", "population": 11103043 },
+						{ "name": "Bavaria", "population": 13140183}
+					]
+				},
+				{
+					"name": "France",
+					"population": 64990511,
+					"children": [
+						{ "name": "Île-de-France", "population": 12117132},
+						{ "name": "Auvergne-Rhône-Alpes", "population": 7916889},
+						{ "name": "Hauts-de-France", "population": 6006870},
+						{ "name": "Nouvelle-Aquitaine", "population": 5935603},
+						{ "name": "Occitanie", "population": 5808435},
+						{ "name": "Grand Est", "population": 5555186},
+						{ "name": "Provence-Alpes-Côte d'Azur", "population": 5021928},
+						{ "name": "Pays de la Loire", "population": 3737632},
+						{ "name": "Normandy", "population": 3335929},
+						{ "name": "Brittany", "population": 3306529},
+						{ "name": "Bourgogne-Franche-Comté", "population": 2818338},
+						{ "name": "Centre-Val de Loire", "population": 2577866},
+						{ "name": "Corsica", "population": 330455}
+					]
+				}
+			]
+		},
+		{
+			"name": "North America",
+			"population": 592296233,
+			"children": [
+				{ "name": "USA", "population": 331449281 },
+				{ "name": "Canada", "population": 38246108 }
+			]
+		}
+	]
+}

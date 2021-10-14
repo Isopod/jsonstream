@@ -416,7 +416,8 @@ begin
   if FPos + LookAhead > FLen then
   begin
     assert(FPos <= FLen);
-    Move(FBuf[FPos], FBuf[0], FLen - FPos);
+    if Flen > FPos then
+      Move(FBuf[FPos], FBuf[0], FLen - FPos);
     Inc(FOffset, FPos);
     FLen := FLen - FPos;         
     FPos := 0;
@@ -571,7 +572,7 @@ label
     Result := 0;
     while (FBuf[FPos] = '0') do
     begin
-      for j := FPos to FLen do
+      for j := FPos to FLen - 1 do
       begin
         if FBuf[FPos] <> '0' then
           break;
@@ -589,7 +590,7 @@ label
     Result := 0;
     while (FLen >{=} 0) and (FBuf[FPos] in Digits) do
     begin
-      for j := FPos to FLen do
+      for j := FPos to FLen - 1 do
       begin
         if not (FBuf[FPos] in Digits) then
           break;
@@ -740,7 +741,7 @@ begin
 
     SkipZero;
 
-    for i := FPos to FLen do
+    for i := FPos to FLen - 1 do
     begin
       if not (FBuf[FPos] in ['0'..'9']) then
         break;
@@ -1512,7 +1513,8 @@ begin
       Inc(o1);
     end;
     FPos := i1;
-    Move(FBuf[i0], _Buf[o0], o1 - o0);
+    if o1 > o0 then
+      Move(FBuf[i0], _Buf[o0], o1 - o0);
 
     // Output buffer is full, exit
     if o1 >= BufSize then

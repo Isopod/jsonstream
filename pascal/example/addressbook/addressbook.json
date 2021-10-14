@@ -1,0 +1,49 @@
+{
+  "Contacts": [
+    {
+      "FirstName": "John",
+      "MiddleName": "Middle",
+      "LastName": "Doe",
+      "PhoneNumbers": [
+        {
+          "Number": "0123456789",
+          "Role": "Home"
+        },
+        {
+          "Number": "487239842",
+          "Role": "Work"
+        }
+      ],
+      "Addresses": [
+        {
+          "Street": "ABC Street 412",
+          "City": "New York City",
+          "ZipCode": "12345",
+          "Role": "Home"
+        },
+        {
+          "Street": "XYZ Street 123",
+          "City": "New York City",
+          "ZipCode": "12346",
+          "Role": "Office"
+        }
+      ],
+      "Emails": [],
+      "Birthday": null
+    },
+    {
+      "FirstName": "Homer",
+      "MiddleName": "Jay",
+      "LastName": "Simpson",
+      "PhoneNumbers": [],
+      "Addresses": [],
+      "Emails": [
+        {
+		  "Address": "homer.birdistheword@msn.com",
+		  "Role": "Personal"
+		}
+      ],
+      "Birthday": 33228
+    }
+  ]
+}
