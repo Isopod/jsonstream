@@ -10,25 +10,11 @@ type
     Role:               String;
   end;
 
-  TAddress = class
-    Street:             String;
-    City:               String;
-    ZipCode:            String;
-    Role:               String;
-  end;
-
-  TEmail = class
-    Address:            String;
-    Role:               String;
-  end;
-
   TContact = class
     FirstName:          String;
     MiddleName:         String;
     LastName:           String;
     PhoneNumbers:       TObjectList;
-    Addresses:          TObjectList;
-    Emails:             TObjectList; 
     Birthday:           TDate;
     BirthdaySet:        Boolean;
 
@@ -52,15 +38,11 @@ type
 constructor TContact.Create;
 begin
   PhoneNumbers := TObjectList.Create(true);
-  Emails       := TObjectList.Create(true);
-  Addresses    := TObjectList.Create(true);
 end;
 
 destructor TContact.Destroy;
 begin
   FreeAndNil(PhoneNumbers);
-  FreeAndNil(Emails);
-  FreeAndNil(Addresses);
   inherited Destroy;
 end;
 
@@ -134,88 +116,6 @@ begin
   end;
 end;
 
-// Address
-
-procedure SerializeAddress(Address: TAddress; Writer: TJsonWriter);
-begin
-  Writer.Dict;
-
-  Writer.Key('Street');
-  Writer.Str(Address.Street);
-
-  Writer.Key('City');
-  Writer.Str(Address.City);
-
-  Writer.Key('ZipCode');
-  Writer.Str(Address.ZipCode);
-
-  Writer.Key('Role');
-  Writer.Str(Address.Role);
-
-  Writer.DictEnd;
-end;
-
-function DeserializeAddress(Reader: TJsonReader): TAddress;
-var
-  Key: String;
-begin
-  if not Reader.Dict then
-    raise EMarkupError.Create;
-
-  Result := TAddress.Create;
-
-  while Reader.Advance <> jnDictEnd do
-  begin
-    if not Reader.Key(Key) then
-      raise EMarkupError.Create;
-
-    if Key = 'Street' then
-      Result.Street := DeserializeStr(Reader)
-    else if Key = 'City' then
-      Result.City := DeserializeStr(Reader)
-    else if Key = 'ZipCode' then
-      Result.ZipCode := DeserializeStr(Reader)
-    else if Key = 'Role' then
-      Result.Role := DeserializeStr(Reader);
-  end;
-end;
-
-// Email
-
-procedure SerializeEmail(Email: TEmail; Writer: TJsonWriter);
-begin
-  Writer.Dict;
-
-  Writer.Key('Address');
-  Writer.Str(Email.Address);
-
-  Writer.Key('Role');
-  Writer.Str(Email.Role);
-
-  Writer.DictEnd;
-end;
-
-function DeserializeEmail(Reader: TJsonReader): TEmail;
-var
-  Key: String;
-begin
-  Result := TEmail.Create;
-
-  if not Reader.Dict then
-    raise EMarkupError.Create;
-
-  while Reader.Advance <> jnDictEnd do
-  begin
-    if not Reader.Key(Key) then
-      raise EMarkupError.Create;
-
-    if Key = 'Address' then
-      Result.Address := DeserializeStr(Reader)
-    else if Key = 'Role' then
-      Result.Role := DeserializeStr(Reader);
-  end;
-end;
-
 // Contact
 
 procedure SerializeContact(Contact: TContact; Writer: TJsonWriter);
@@ -237,18 +137,6 @@ begin
   Writer.List;
   for i := 0 to Contact.PhoneNumbers.Count - 1 do
     SerializePhoneNumber(TPhoneNumber(Contact.PhoneNumbers[i]), Writer);
-  Writer.ListEnd;
-
-  Writer.Key('Addresses');
-  Writer.List;
-  for i := 0 to Contact.Addresses.Count - 1 do
-    SerializeAddress(TAddress(Contact.Addresses[i]), Writer);
-  Writer.ListEnd;
-
-  Writer.Key('Emails');
-  Writer.List;
-  for i := 0 to Contact.Emails.Count - 1 do
-    SerializeEmail(TEmail(Contact.Emails[i]), Writer);
   Writer.ListEnd;
 
   Writer.Key('Birthday');
@@ -283,12 +171,6 @@ begin
     else if (Key = 'PhoneNumbers') and Reader.List then
       while Reader.Advance <> jnListEnd do
         Result.PhoneNumbers.Add(DeserializePhoneNumber(Reader))
-    else if (Key = 'Addresses') and Reader.List then
-      while Reader.Advance <> jnListEnd do
-        Result.Addresses.Add(DeserializeAddress(Reader))
-    else if (Key = 'Emails') and Reader.List then
-      while Reader.Advance <> jnListEnd do
-        Result.Emails.Add(DeserializeEmail(Reader))
     else if (Key = 'Birthday') and not Reader.Null then
     begin
       Result.BirthdaySet := true;
@@ -373,7 +255,6 @@ procedure ListContact(Contact: TContact);
 var
   i:           Integer;
   PhoneNumber: TPhoneNumber;
-  Address:     TAddress;
 begin
   WriteLn('First Name:  ', Contact.FirstName);
   WriteLn('Middle Name: ', Contact.MiddleName);
@@ -389,25 +270,6 @@ begin
   if Contact.PhoneNumbers.Count = 0 then
     WriteLn;
 
-  for i := 0 to Contact.Addresses.Count - 1 do
-  begin
-    Address := TAddress(Contact.Addresses[i]);
-    WriteLn('Address (', Address.Role, '):');
-    WriteLn('  Street:    ', Address.Street);
-    WriteLn('  City:      ', Address.City);
-    WriteLn('  Zip:       ', Address.ZipCode);
-  end;
-
-  Write('Email:       ');
-  for i := 0 to Contact.Emails.Count - 1 do
-  begin
-    if i <> 0 then
-      Write('             ');
-    WriteLn(TEmail(Contact.Emails[i]).Address, ' (',TEmail(Contact.Emails[i]).Role, ')');
-  end;
-  if Contact.Emails.Count = 0 then
-    WriteLn;
-
   if Contact.BirthdaySet then
     WriteLn('Birthday:    ', DateToStr(Contact.Birthday));
 end;
@@ -416,8 +278,6 @@ procedure AddContact(AddressBook: TAddressBook);
 var
   Contact: TContact;
   Number:  TPhoneNumber;
-  Address: TAddress; 
-  Email: TEmail;
   s:       String;
 begin
   Contact := TContact.Create;
@@ -432,24 +292,6 @@ begin
     Number.Number    := QueryString('Enter phone number:');
     Number.Role      := QueryString('Enter description for this number (e.g. Home/Work/Mobile):', 'Home');
     Contact.PhoneNumbers.Add(Number);
-  end;
-
-
-  while QueryYesNo('Add address?') do
-  begin
-    Address          := TAddress.Create;
-    Address.Street   := QueryString('Enter street:');
-    Address.City     := QueryString('Enter City');
-    Address.ZipCode  := QueryString('Enter ZIP Code');
-    Address.Role     := QueryString('Enter description for this address (e.g. Home/Work):', 'Home');
-    Contact.Addresses.Add(Address);
-  end;
-
-  while QueryYesNo('Add email address?') do
-  begin
-    Email            := TEmail.Create;
-    Email.Address    := QueryString('Enter email address:');
-    Email.Role       := QueryString('Enter description for this address (e.g. Personal/Work):', 'Personal');
   end;
 
   while true do
