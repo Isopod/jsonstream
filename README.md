@@ -9,7 +9,7 @@ also fault tolerant and can report and recover from certain errors like
 incorrect nesting or a missing comma. It is easy to use and adapt to your own
 use cases.
 
-## What makes this different to other JSON libraries?
+## What makes this library different?
 Other JSON libraries do a lot of things at once. When parsing JSON, they not
 only parse, but also turn the markup into an object tree, or even use
 Reflection/RTTI to automatically map between your own objects and their JSON
@@ -113,8 +113,8 @@ initialization. The parser will then abort once this limit is reached.
 Output can be pretty-printed if desired or use a compact representation with no
 extra whitespace.
 
-## Contents
-This repository has subfolders for thee various language implementations of the
+## Files
+This repository has subfolders for the various language implementations of the
 library.  Currently, the only implementation is written in Pascal, but other
 implementations (e.g. C) are planned.
 

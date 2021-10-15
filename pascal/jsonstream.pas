@@ -192,6 +192,11 @@ type
     function  AcceptKey: boolean;
     procedure SetLastError(Error: TJsonError; const Msg: string);
   public
+
+    // Construct a TJsonReader object. The input will be read from Stream. Pass
+    // [jfJson5] as Features to create a JSON5 parser instead of a regular JSON
+    // parser. You can specify a maximum allowable nesting depth with
+    // MaxNestingDepth. If this depth is exceeded, the parser will abort.
     constructor Create(
       Stream: TStream; Features: TJsonFeatures=[];
       MaxNestingDepth: integer=MaxInt
@@ -216,9 +221,9 @@ type
     // is automatically advanced to the corresponding value.
     // If false is returned, the current element is either not a key or an error
     // ocurred during decoding (such as an invalid escape sequence or premature
-    // end of file). In that case the contents of K are undefined.
+    // end of file) and the contents of K are undefined.
     // If an error occured, you may call Proceed() to ignore it and call Key()
-    // again.
+    // again. This function only returns true once per element.
     function  Key(out K: TJsonString): Boolean;
 
     // This function is like Key, except that it does not return the full key,
@@ -239,9 +244,9 @@ type
     // If true is returned, then the decoded string value is stored in S.
     // If false is returned, the current element is either not a string or an
     // error occurred during decoding (such as an invalid escape sequence or
-    // premature end of file). In that case the contents of S are undefined.
+    // premature end of file) and the contents of S are undefined.
     // If an error occurred, you may call Proceed() to ignore it and call Str()
-    // again.
+    // again. This function only returns true once per element.
     function  Str(out S: TJsonString): Boolean;
 
     // This function is like Str, except that it does not return the full string,
@@ -259,24 +264,29 @@ type
     function  StrBuf(out Buf; BufSize: SizeInt): SizeInt;
 
     // Returns true iff the current element is a number that can be exactly
-    // represented by an integer and returns its value in Num.
+    // represented by an integer and returns its value in Num. This function only
+    // return true once per element.
     function  Number(out Num: integer): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
-    // represented by an int64 and returns its value in Num.
+    // represented by an int64 and returns its value in Num. This function only
+    // returns true once per element.
     function  Number(out Num: int64): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
-    // represented by an uint64 and returns its value in Num.
+    // represented by an uint64 and returns its value in Num. This function only
+    // returns true once per element.
     function  Number(out Num: uint64): Boolean; overload;
     // Returns true iff the current element is a number and returns its value
     // in Num. If the number exceeds the representable precision or range of a
     // double precision float, it will be rounded to the closest approximation.
+    // This function only returns true once per element.
     function  Number(out Num: double): Boolean; overload;
 
     // Returns true iff the current element is a boolean and returns its value
-    // in bool.
+    // in bool. This function only returns true once per element.
     function  Bool(out Bool: Boolean): Boolean;
 
-    // Returns true iff the current element is a null value.
+    // Returns true iff the current element is a null value. This function only
+    // returns true once per element.
     function  Null: Boolean;
 
     // Returns true iff the current element is a dict. If true is returned,
@@ -2063,13 +2073,11 @@ begin
     exit;
   end;
 
-  // When there is a parse error after a dict key, we inject a fake null value.
-  // Don't want to reset the skip flag in that case.
   StackPop;
   Reduce;
 
+  Result := true;   
   FSkip  := false;
-  Result := true;
 end;
 
 function TJsonReader.Dict: Boolean;
