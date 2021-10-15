@@ -91,7 +91,7 @@ begin
     // Note: Reader.Error should always be checked *last* because some errors
     // can only be detected after the appropriate function (e.g. Reader.Str) 
     // has been called. For example, we don't know that a string is unterminated
-	// until we actually try to read it.
+    // until we actually try to read it.
     else if Reader.Error then
     begin
       Result := false;
