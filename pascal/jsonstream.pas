@@ -16,17 +16,17 @@ type
   TJsonFeatures = set of TJsonFeature;
 
   TJsonState = (
-    jnError,
-    jnEOF,
-    jnDict,
-    jnDictEnd,
-    jnList,
-    jnListEnd,
-    jnNumber,
-    jnBoolean,
-    jnNull,
-    jnString,
-    jnKey
+    jsError,
+    jsEOF,
+    jsDict,
+    jsDictEnd,
+    jsList,
+    jsListEnd,
+    jsNumber,
+    jsBoolean,
+    jsNull,
+    jsString,
+    jsKey
   );
 
   TJsonError = (
@@ -49,22 +49,22 @@ type
   );
 
   TJsonInternalState = (
-    jsInitial,
-    jsError,
-    jsEOF,
-    jsListHead,
-    jsAfterListItem,
-    jsListItem,
-    jsDictHead,
-    jsDictItem,
-    jsAfterDictItem,
-    jsDictKey,
-    jsAfterDictKey,
-    jsDictValue,
-    jsNumber,
-    jsBoolean,
-    jsNull,
-    jsString
+    jisInitial,
+    jisError,
+    jisEOF,
+    jisListHead,
+    jisAfterListItem,
+    jisListItem,
+    jisDictHead,
+    jisDictItem,
+    jisAfterDictItem,
+    jisDictKey,
+    jisAfterDictKey,
+    jisDictValue,
+    jisNumber,
+    jisBoolean,
+    jisNull,
+    jisString
   );
 
   TJsonStringMode = (
@@ -134,7 +134,7 @@ type
 
     // Nesting depth of structures (lists + dicts), e.g. "[[" would be depth 2.
     // This is different from Length(FStack) because FStack contains internal
-    // nodes such as jsDictValue etc.. This is checked against MaxNestingDepth
+    // nodes such as jisDictValue etc.. This is checked against MaxNestingDepth
     // and an error is generated if the maximum nesting depth is exceeded. The
     // purpose of this is to guarantee an upper bound on memory consumption that
     // doesn't grow linearly with the input in the worst case.
@@ -165,7 +165,7 @@ type
 
     // Parsing helpers
     procedure RefillBuffer(LookAhead: integer = 1);
-    procedure SkipSpace;       
+    procedure SkipSpace;
     procedure SkipGarbage;
     procedure SkipSingleLineComment;
     procedure SkipMultiLineComment;
@@ -175,7 +175,7 @@ type
 
     // Skip helpers
     procedure SkipNumber;
-    procedure SkipBoolean;   
+    procedure SkipBoolean;
     procedure SkipNull;
     procedure SkipString;
     procedure SkipKey;
@@ -187,7 +187,7 @@ type
     // Other internal functions
     function  InternalAdvance: TJsonState;
     function  InternalProceed: Boolean;
-    procedure InvalidOrUnexpectedToken(const Msg: TJsonString);  
+    procedure InvalidOrUnexpectedToken(const Msg: TJsonString);
     function  AcceptValue: boolean;
     function  AcceptKey: boolean;
     procedure SetLastError(Error: TJsonError; const Msg: string);
@@ -248,7 +248,7 @@ type
     // but only reads part of it. This is intended for situations where the
     // string could be very large ind it would not be efficient to allocate it
     // in memory in its entirety. The semantics are the same as the read()
-    // syscall on Unix: Up to BufSize bytes are read and stored in Buf.  
+    // syscall on Unix: Up to BufSize bytes are read and stored in Buf.
     // Return value:
     //   > 0: The number of bytes actually read.
     //   = 0: Indicates the end of the string.
@@ -267,7 +267,7 @@ type
     // Returns true iff the current element is a number that can be exactly
     // represented by an uint64 and returns its value in Num.
     function  Number(out Num: uint64): Boolean; overload;
-    // Returns true iff the current element is a number and returns its value 
+    // Returns true iff the current element is a number and returns its value
     // in Num. If the number exceeds the representable precision or range of a
     // double precision float, it will be rounded to the closest approximation.
     function  Number(out Num: double): Boolean; overload;
@@ -356,7 +356,7 @@ type
     procedure Key(const K: TJsonString);
     // Streaming equivalent of the Key() method. See StrBuf().
     procedure KeyBuf(const Buf; BufSize: SizeInt);
-    procedure Str(const S: TJsonString);          
+    procedure Str(const S: TJsonString);
     // Streaming equivalent of the Str() method. To indicate the end of the
     // string, call once with BufSize set to 0.
     // Note: To write an empty string, you have to call the method twice:
@@ -405,7 +405,7 @@ begin
   FLastErrorPosition := 0;
   FMaxNestingDepth   := MaxNestingDepth;
 
-  StackPush(jsInitial);
+  StackPush(jisInitial);
   Advance;
 end;
 
@@ -419,7 +419,7 @@ begin
     if Flen > FPos then
       Move(FBuf[FPos], FBuf[0], FLen - FPos);
     Inc(FOffset, FPos);
-    FLen := FLen - FPos;         
+    FLen := FLen - FPos;
     FPos := 0;
 
     repeat
@@ -485,7 +485,7 @@ end;
 
 procedure TJsonReader.SkipNumber;
 begin
-  if FState <> jnNumber then
+  if FState <> jsNumber then
     Exit;
 
   FNumber := '';
@@ -644,7 +644,7 @@ begin
     // Leading + not allowed by JSON
     if (FBuf[FPos] = '+') and not (jfJson5 in FFeatures) then
     begin
-      FNumberErr := true;  
+      FNumberErr := true;
       SetLastError(jeInvalidNumber, 'Number has leading `+`.');
     end;
 
@@ -677,7 +677,7 @@ begin
   if (LeadingZeroes > 1) or
      (LeadingZeroes > 0) and (FLen >= 0) and (FBuf[FPos] in ['0'..'9']) then
   begin
-    FNumberErr := true;   
+    FNumberErr := true;
     SetLastError(jeInvalidNumber, 'Number has leading zeroes.');
   end;
 
@@ -692,7 +692,7 @@ begin
       // JSON requires digit after decimal point
       if (FLen < 0) or not (FBuf[FPos] in ['0'..'9']) then
       begin
-        FNumberErr := true;  
+        FNumberErr := true;
         SetLastError(jeInvalidNumber, 'Expected digit after decimal point.');
       end;
       Exponent := -SkipZero;
@@ -718,7 +718,7 @@ begin
       if ((FLen < 0) or not (FBuf[FPos] in ['0'..'9'])) and
          not (jfJson5 in FFeatures) then
       begin
-        FNumberErr := true; 
+        FNumberErr := true;
         SetLastError(jeInvalidNumber, 'Expected digit after decimal point.');
       end;
       Exponent := -ReadDigits;
@@ -770,9 +770,9 @@ Finalize:
   if (FLen > 0) and not (FBuf[FPos] in WordBoundaryChars) then
   begin
     StackPop; // Was never a number to begin with
-    StackPush(jsNull);
-    StackPush(jsError);
-    FState := jnError;
+    StackPush(jisNull);
+    StackPush(jisError);
+    FState := jsError;
     SetLastError(jeInvalidToken, 'Invalid token.');
 
     // Skip rest of token
@@ -787,9 +787,9 @@ Finalize:
   end;
 
   if FNumberErr then
-  begin               
-    FState := jnError;
-    StackPush(jsError);
+  begin
+    FState := jsError;
+    StackPush(jisError);
   end
 end;
 
@@ -867,25 +867,25 @@ begin
 
   while true do
     case StackTop of
-      jsDictKey:
+      jisDictKey:
       begin
         StackPop;
-        StackPush(jsAfterDictKey);
+        StackPush(jisAfterDictKey);
       end;
-      jsString:
+      jisString:
       begin
         StackPop;
       end;
-      jsDictValue:
+      jisDictValue:
       begin
         StackPop;
         StackPop;
-        StackPush(jsAfterDictItem);
+        StackPush(jisAfterDictItem);
       end;
-      jsListHead, jsListItem:
+      jisListHead, jisListItem:
       begin
         StackPop;
-        StackPush(jsAfterListItem);
+        StackPush(jisAfterListItem);
       end
       else
         break;
@@ -897,7 +897,7 @@ var
   NewSkip: integer;
   BeenSkipping: Boolean;
 begin
-  if StackTop in [jsListHead, jsDictHead] then
+  if StackTop in [jisListHead, jisDictHead] then
     NewSkip := High(FStack) - 1
   else
     NewSkip := High(FStack);
@@ -908,12 +908,12 @@ begin
   while true do
   begin
     case InternalAdvance of
-      jnError:
+      jsError:
         break;
-    end;  
+    end;
     if High(FStack) <= FSkipUntil then
     begin
-      BeenSkipping := FSkipUntil < MaxInt;  
+      BeenSkipping := FSkipUntil < MaxInt;
       FSkipUntil := MaxInt;
 
       // When skipping from inside a structure like this:
@@ -923,7 +923,7 @@ begin
       //
       // After skipping, we still get the closing ]. But the user who called
       // Skip() is not interested in this token, so we have to eat it.
-      if BeenSkipping and (StackTop in [jsAfterListItem, jsAfterDictItem])then
+      if BeenSkipping and (StackTop in [jisAfterListItem, jisAfterDictItem])then
         InternalAdvance;
 
       break;
@@ -931,7 +931,7 @@ begin
   end;
 
   Result := FState;
-  FSkip := Result in [jnDict, jnKey, jnList, jnNumber, jnString];
+  FSkip := Result in [jsDict, jsKey, jsList, jsNumber, jsString];
 end;
 
 function TJsonReader.State: TJsonState;
@@ -947,7 +947,7 @@ var
 begin
   start:
 
-  if StackTop = jsError then
+  if StackTop = jisError then
     FPopUntil := 0;
 
   if FPopUntil < 0 then
@@ -966,22 +966,22 @@ begin
       PoppedItem := StackPop;
 
       case PoppedItem of
-        jsListItem, jsListHead, jsAfterListItem:
+        jisListItem, jisListHead, jisAfterListItem:
         begin
-          FState := jnListEnd;
+          FState := jsListEnd;
           Dec(FNestingDepth);
           break;
         end;
-        jsDictItem, jsDictHead, jsAfterDictItem:
+        jisDictItem, jisDictHead, jisAfterDictItem:
         begin
-          FState := jnDictEnd; 
+          FState := jsDictEnd;
           Dec(FNestingDepth);
           break;
         end;
-        jsInitial, jsEOF:
+        jisInitial, jisEOF:
         begin
-          FState := jnEOF;
-          StackPush(jsEOF);
+          FState := jsEOF;
+          StackPush(jisEOF);
           break;
         end
       end;
@@ -989,7 +989,7 @@ begin
 
     Result := FState;
     FSkip := false;
-    Reduce;   
+    Reduce;
 
     // Note that the above loop only looks at FPopUntil and does not pay respect
     // to FSkipUntil! Therefore it can pop one more element than we actually
@@ -1013,67 +1013,67 @@ begin
   end;
 
   case StackTop of
-    jsInitial:
+    jisInitial:
       case FToken of
         jtEOF:
         begin
-          FState := jnEOF;
+          FState := jsEOF;
           StackPop;
-          StackPush(jsEOF);
+          StackPush(jisEOF);
         end
         else if not AcceptValue then
         begin
-          FState := jnError;
+          FState := jsError;
           InvalidOrUnexpectedToken(
             'Expected `[` or `{`, number, boolean, string or null.'
           );
-          StackPush(jsError);
+          StackPush(jisError);
         end;
       end;
-    jsEOF:
-      FState := jnEOF;
-    jsListItem, jsListHead:
+    jisEOF:
+      FState := jsEOF;
+    jisListItem, jisListHead:
       case FToken of
         jtListEnd:
         begin
-          if (StackTop = jsListHead) or (jfJson5 in FFeatures) then
+          if (StackTop = jisListHead) or (jfJson5 in FFeatures) then
           begin
-            FState := jnListEnd;
+            FState := jsListEnd;
             StackPop;
             Reduce;
             Inc(FPos);
           end
           else
           begin
-            FState := jnError;
+            FState := jsError;
             SetLastError(
               jeTrailingComma,
               'Trailing comma before end of list.'
             );
-            StackPush(jsError);
+            StackPush(jisError);
           end;
         end
         else if not AcceptValue then
         begin
-          FState := jnError;
+          FState := jsError;
           InvalidOrUnexpectedToken(
             'Expected `[` or `{`, number, boolean, string or null.'
           );
-          StackPush(jsError);
+          StackPush(jisError);
         end;
       end;
-    jsAfterListItem:
+    jisAfterListItem:
       case FToken of
         jtComma:
         begin
           StackPop;
-          StackPush(jsListItem);
-          Inc(FPos);    
+          StackPush(jisListItem);
+          Inc(FPos);
           goto start;
         end;
         jtListEnd:
         begin
-          FState := jnListEnd;
+          FState := jsListEnd;
           StackPop;
           Reduce;
           Inc(FPos);
@@ -1081,97 +1081,97 @@ begin
         end
         else
         begin
-          FState := jnError;   
+          FState := jsError;
           InvalidOrUnexpectedToken('Expected `,` or `]`.');
-          StackPush(jsError);
+          StackPush(jisError);
         end;
       end;
-    jsDictItem, jsDictHead:
+    jisDictItem, jisDictHead:
       case FToken of
         jtDictEnd:
         begin
-          if (StackTop = jsDictHead) or (jfJson5 in FFeatures) then
+          if (StackTop = jisDictHead) or (jfJson5 in FFeatures) then
           begin
-            FState := jnDictEnd;
+            FState := jsDictEnd;
             StackPop; // DictItem
             Reduce;
             Inc(FPos);
           end
           else
           begin
-            FState := jnError;
+            FState := jsError;
             SetLastError(
               jeTrailingComma,
               'Trailing comma before end of dict.'
             );
-            StackPush(jsError);
+            StackPush(jisError);
           end;
         end
         else if not AcceptKey then
         begin
-          FState := jnError;   
+          FState := jsError;
           InvalidOrUnexpectedToken('Expected string or `}`.');
-          StackPush(jsError);
+          StackPush(jisError);
         end;
       end;
-    jsAfterDictKey:
+    jisAfterDictKey:
       case FToken of
         jtColon:
         begin
           StackPop;
-          StackPush(jsDictValue);
+          StackPush(jisDictValue);
           Inc(FPos);
           goto start;
         end
         else
         begin
-          FState := jnError;  
+          FState := jsError;
           InvalidOrUnexpectedToken('Expected `:`.');
-          StackPush(jsError);
+          StackPush(jisError);
         end;
       end;
-    jsDictValue: 
+    jisDictValue:
       if not AcceptValue then
       begin
-        FState := jnError;
+        FState := jsError;
         InvalidOrUnexpectedToken(
           'Expected `[`, `{`, number, boolean, string or null.'
         );
-        StackPush(jsError);
+        StackPush(jisError);
       end;
-    jsAfterDictItem:
+    jisAfterDictItem:
       case FToken of
         jtComma:
         begin
           StackPop; // AfterDictItem
-          StackPush(jsDictItem);
+          StackPush(jisDictItem);
           Inc(FPos);
           goto start;
         end;
         jtDictEnd:
         begin
-          FState := jnDictEnd;
+          FState := jsDictEnd;
           StackPop; // AfterDictItem
           Reduce;
-          Inc(FPos);             
+          Inc(FPos);
           Dec(FNestingDepth);
         end
         else
         begin
-          FState := jnError;    
+          FState := jsError;
           InvalidOrUnexpectedToken('Expected `,` or `}`.');
-          StackPush(jsError);
+          StackPush(jisError);
         end;
       end;
-    jsNumber:
+    jisNumber:
       SkipNumber;
-    jsBoolean:
+    jisBoolean:
       SkipBoolean;
-    jsNull:
+    jisNull:
       SkipNull;
-    jsString:
+    jisString:
       SkipString;
-    jsDictKey:
+    jisDictKey:
       SkipKey;
   end;
   Result := FState;
@@ -1216,14 +1216,14 @@ var
 begin
   Result := false;
 
-  if StackTop <> jsError then
+  if StackTop <> jisError then
     exit;
 
-  // Pop off the jsError state
+  // Pop off the jisError state
   StackPop;
 
   // Skip control characters/whitespace
-  if {}(StackTop <> jsString) and (FBuf[FPos] in [#0..#32]) then
+  if {}(StackTop <> jisString) and (FBuf[FPos] in [#0..#32]) then
   begin
     SkipGarbage;
     exit;
@@ -1231,18 +1231,18 @@ begin
 
   // Treat garbage tokens as string
   if (FToken = jtUnknown) or
-     (StackTop in [jsDictHead, jsDictItem]) and
+     (StackTop in [jisDictHead, jisDictItem]) and
      (FToken in [jtNumber, jtTrue, jtFalse, jtNull]) then
   begin
-    if StackTop in [jsDictHead, jsDictItem] then
+    if StackTop in [jisDictHead, jisDictItem] then
     begin
-      StackPush(jsDictKey);
-      FState := jnKey;
+      StackPush(jisDictKey);
+      FState := jsKey;
     end
     else
     begin
-      StackPush(jsString);
-      FState := jnString;
+      StackPush(jisString);
+      FState := jsString;
     end;
     //FFauxString := true;
     if FBuf[FPos] = '''' then
@@ -1259,66 +1259,66 @@ begin
   end;
 
   // List: missing comma
-  if (StackTop = jsAfterListItem) and
+  if (StackTop = jisAfterListItem) and
      (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtDoubleQuote]) then
   begin
     StackPop;
-    StackPush(jsListItem);
+    StackPush(jisListItem);
     exit;
   end;
 
   // List: trailing comma
-  if (StackTop = jsListItem) and (FToken = jtListEnd) then
+  if (StackTop = jisListItem) and (FToken = jtListEnd) then
   begin
     StackPop;
-    StackPush(jsAfterListItem);
+    StackPush(jisAfterListItem);
     exit;
   end;
 
   // Dict: missing comma
-  if (StackTop = jsAfterDictItem) and
+  if (StackTop = jisAfterDictItem) and
      (FToken in [jtDict, jtList, jtNumber, jtTrue, jtFalse, jtNull, jtDoubleQuote]) then
   begin
     StackPop;
-    StackPush(jsDictItem);
+    StackPush(jisDictItem);
     exit;
   end;
 
   // Dict: trailing comma
-  if (StackTop = jsDictItem) and (FToken = jtDictEnd) then
+  if (StackTop = jisDictItem) and (FToken = jtDictEnd) then
   begin
     StackPop;
-    StackPush(jsAfterDictItem);
+    StackPush(jisAfterDictItem);
     exit;
   end;
 
   // Dict: missing colon
-  if StackTop = jsAfterDictKey then
+  if StackTop = jisAfterDictKey then
   begin
     StackPop; // AfterDictKey
-    StackPush(jsDictValue);
-    StackPush(jsNull);
-    FState := jnNull;
-    FSkip := true;        
+    StackPush(jisDictValue);
+    StackPush(jisNull);
+    FState := jsNull;
+    FSkip := true;
     Result := true;
     exit;
   end;
 
   // Dict: missing value after colon
-  if StackTop = jsDictValue then
+  if StackTop = jisDictValue then
   begin
-    StackPush(jsNull);
-    FState := jnNull;
-    FSkip := true;   
+    StackPush(jisNull);
+    FState := jsNull;
+    FSkip := true;
     Result := true;
     exit;
   end;
 
   // Dict: Expected key, but got something else
-  if (StackTop in [jsDictHead, jsDictItem]) and
+  if (StackTop in [jisDictHead, jisDictItem]) and
      (FToken in [jtDict, jtList]) then
   begin
-    StackPush(jsDictValue);
+    StackPush(jisDictValue);
     FSkip := true;
     exit;
   end;
@@ -1326,12 +1326,13 @@ begin
   // List closed, but node is not a list or
   // Dict closed, but node is not a dict
   // (this rule also catches trailing comma)
-  if ((FToken = jtListEnd) and not (StackTop in [jsListHead, jsListItem])) or
-     ((FToken = jtDictEnd) and not (StackTop in [jsDictHead, jsDictItem])) then
+  if ((FToken = jtListEnd) and not (StackTop in [jisListHead, jisListItem])) or
+     ((FToken = jtDictEnd) and not (StackTop in [jisDictHead, jisDictItem])) then
   begin
+    Needle := []; // Shut up compiler warning
     case FToken of
-      jtListEnd: Needle := [jsListItem, jsListHead];
-      jtDictEnd: Needle := [jsDictItem, jsDictHead];
+      jtListEnd: Needle := [jisListItem, jisListHead];
+      jtDictEnd: Needle := [jisDictItem, jisDictHead];
       else       assert(false);
     end;
 
@@ -1363,39 +1364,39 @@ begin
     exit;
   end;
 
-  if StackTop = jsNumber then
+  if StackTop = jisNumber then
   begin
-    FState := jnNumber;
+    FState := jsNumber;
     FSkip := true;
     Result := true;
     exit;
   end;
 
-  if StackTop = jsNull then
+  if StackTop = jisNull then
   begin
     // This case only occurs when a garbage token like 23abc occurred, that
     // looked like  a number at first but turned out to be garbage. ParseNumber
     // then turns that into a null value.
-    FState := jnNull;
+    FState := jsNull;
     FSkip := true;
     Result := true;
     exit;
   end;
 
-  if StackTop = jsString then
+  if StackTop = jisString then
   begin
     FStrIgnoreError := true;
     FSkip := true;
-    FState := jnString;
+    FState := jsString;
     Result := true;
     exit;
   end;
 
-  if StackTop = jsDictKey then
+  if StackTop = jisDictKey then
   begin
     FStrIgnoreError := true;
     FSkip := true;
-    FState := jnKey;
+    FState := jsKey;
     Result := true;
     exit;
   end;
@@ -1405,7 +1406,7 @@ begin
   FSkip := false;
 
   // Push error state back on
-  StackPush(jsError);
+  StackPush(jisError);
 end;
 
 function TJsonReader.Proceed: Boolean;
@@ -1455,10 +1456,13 @@ label
 begin
   o1 := 0;
 
+  StopChars := []; // Shut up compiler warning
+
   case FStringMode of
     jsmDoubleQuoted: StopChars := ['\', '"'];
     jsmSingleQuoted: StopChars := ['\', ''''];
     jsmUnquoted:     StopChars := [#0..#32, ':', ',', '{', '}', '[', ']'];
+    else             assert(false);
   end;
 
   // JSON strings must not contain line-breaks
@@ -1471,7 +1475,7 @@ begin
 
   FillByte(_Buf[0], BufSize, 0);
 
-  if (BufSize <= 0) or (StackTop = jsError) or FStringEnd then
+  if (BufSize <= 0) or (StackTop = jisError) or FStringEnd then
   begin
     Result := -1;
     exit;
@@ -1525,8 +1529,8 @@ begin
     begin
       if not FStrIgnoreError then
       begin
-        FState := jnError;
-        StackPush(jsError);
+        FState := jsError;
+        StackPush(jisError);
         SetLastError(jeUnexpectedEOF, 'Unexpected end-of-file.');
       end;
 
@@ -1554,20 +1558,20 @@ begin
       // Maximum length of an escape sequence is 6 (\u1234), so we need 6
       // characters lookahead
       RefillBuffer(6);
-                          
+
       // EOF after the '\'?
       if FPos + 1 >= FLen then
       begin
         if not FStrIgnoreError then
         begin
-          FState := jnError;       
-          StackPush(jsError);
+          FState := jsError;
+          StackPush(jisError);
           SetLastError(jeUnexpectedEOF, 'Unexpected end-of-file.');
         end;
 
         FStrIgnoreError := false;
         break;
-      end;      
+      end;
 
       assert(FEscapeSequence = '');
 
@@ -1588,8 +1592,8 @@ begin
         begin
           if not FStrIgnoreError then
           begin
-            FState := jnError;
-            StackPush(jsError);
+            FState := jsError;
+            StackPush(jisError);
             SetLastError(
               jeInvalidEscapeSequence,
               'Invalid escape sequence in string. Expected four hex digits.'
@@ -1639,8 +1643,8 @@ begin
             end
             else if not FStrIgnoreError then
             begin
-              FState := jnError;         
-              StackPush(jsError);
+              FState := jsError;
+              StackPush(jisError);
               SetLastError(
                 jeInvalidEscapeSequence,
                 'Invalid escape sequence in string.'
@@ -1664,8 +1668,8 @@ begin
       // Invalid character
       if not FStrIgnoreError then
       begin
-        FState := jnError;     
-        StackPush(jsError);
+        FState := jsError;
+        StackPush(jisError);
         SetLastError(
           jeInvalidEscapeSequence,
           'Invalid character in string. Codepoints below 32 must be encoded ' +
@@ -1678,11 +1682,11 @@ begin
         _Buf[o1] := FBuf[FPos];
         Inc(FPos);
         inc(o1);
-      end;    
+      end;
       FStrIgnoreError := false;
     end
     else
-    begin     
+    begin
       // End of string
       assert(
         (FStringMode = jsmUnquoted) or
@@ -1699,15 +1703,15 @@ return:
 
   FStrIgnoreError := false;
 
-  if (Result = 0) and (StackTop <> jsError) then
-  begin         
+  if (Result = 0) and (StackTop <> jisError) then
+  begin
     FStringEnd := true;
     if FStringMode <> jsmUnquoted then
       Inc(FPos);
     Reduce;
   end;
 
-  if (Result = 0) and (StackTop = jsError) then
+  if (Result = 0) and (StackTop = jisError) then
     Result := -1;
 end;
 
@@ -1716,7 +1720,7 @@ var
   Len:   SizeInt;
   Delta: SizeInt;
 begin
-  S := FSavedStr;             
+  S := FSavedStr;
   Len := Length(S);
   SetLength(S, Len + 32);
   while true do
@@ -1752,9 +1756,9 @@ begin
     begin
       if FNestingDepth >= FMaxNestingDepth then
       begin
-        FState := jnError;
+        FState := jsError;
         FPopUntil := 0;
-        StackPush(jsError);
+        StackPush(jisError);
         SetLastError(
           jeNestingTooDeep,
           Format('Nesting limit of %d exceeded.', [FMaxNestingDepth])
@@ -1762,9 +1766,9 @@ begin
       end
       else
       begin
-        FState := jnDict;
-        StackPush(jsDictHead);
-        Inc(FPos);       
+        FState := jsDict;
+        StackPush(jisDictHead);
+        Inc(FPos);
         Inc(FNestingDepth);
       end;
       Result := true;
@@ -1773,9 +1777,9 @@ begin
     begin
       if FNestingDepth >= FMaxNestingDepth then
       begin
-        FState := jnError;
+        FState := jsError;
         FPopUntil := 0;
-        StackPush(jsError);  
+        StackPush(jisError);
         SetLastError(
           jeNestingTooDeep,
           Format('Nesting limit of %d exceeded.', [FMaxNestingDepth])
@@ -1783,8 +1787,8 @@ begin
       end
       else
       begin
-        FState := jnList;
-        StackPush(jsListHead);
+        FState := jsList;
+        StackPush(jisListHead);
         Inc(FPos);
         Inc(FNestingDepth);
       end;
@@ -1792,47 +1796,47 @@ begin
     end;
     jtNumber:
     begin
-      FState := jnNumber;
-      StackPush(jsNumber);
-      ParseNumber;   
+      FState := jsNumber;
+      StackPush(jisNumber);
+      ParseNumber;
       Result := true;
     end;
     jtTrue:
     begin
-      FState := jnBoolean;
-      StackPush(jsBoolean);
-      Inc(FPos, Length('true'));      
+      FState := jsBoolean;
+      StackPush(jisBoolean);
+      Inc(FPos, Length('true'));
       Result := true;
     end;
     jtFalse:
     begin
-      FState := jnBoolean;
-      StackPush(jsBoolean);
-      Inc(FPos, Length('false')); 
+      FState := jsBoolean;
+      StackPush(jisBoolean);
+      Inc(FPos, Length('false'));
       Result := true;
     end;
     jtNull:
     begin
-      FState := jnNull;
-      StackPush(jsNull);
-      Inc(FPos, Length('null'));   
+      FState := jsNull;
+      StackPush(jisNull);
+      Inc(FPos, Length('null'));
       Result := true;
     end;
     jtDoubleQuote:
     begin
-      FState := jnString;
-      StackPush(jsString);
+      FState := jsString;
+      StackPush(jisString);
       FStringMode := jsmDoubleQuoted;
       FStringEnd := false;
-      Inc(FPos);       
+      Inc(FPos);
       Result := true;
     end;
     jtSingleQuote:
     begin
       if jfJson5 in FFeatures then
       begin
-        FState := jnString;
-        StackPush(jsString);
+        FState := jsString;
+        StackPush(jisString);
         FStringMode := jsmSingleQuoted;
         FStringEnd := false;
         Inc(FPos);
@@ -1848,8 +1852,8 @@ begin
   case FToken of
     jtDoubleQuote:
     begin
-      FState := jnKey;
-      StackPush(jsDictKey);
+      FState := jsKey;
+      StackPush(jisDictKey);
       FStringMode := jsmDoubleQuoted;
       FStringEnd := false;
       Inc(FPos);
@@ -1859,8 +1863,8 @@ begin
     begin
       if jfJson5 in FFeatures then
       begin
-        FState := jnKey;
-        StackPush(jsDictKey);
+        FState := jsKey;
+        StackPush(jisDictKey);
         FStringMode := jsmSingleQuoted;
         FStringEnd := false;
         Inc(FPos);
@@ -1878,8 +1882,8 @@ begin
            '?', '!', '=', '#'
          ]) then
       begin
-        FState := jnKey;
-        StackPush(jsDictKey);
+        FState := jsKey;
+        StackPush(jisDictKey);
         FStringMode := jsmUnquoted;
         FStringEnd := false;
         Result := true;
@@ -1897,7 +1901,7 @@ end;
 
 function TJsonReader.Key(out K: TJsonString): Boolean;
 begin
-  if FState <> jnKey then
+  if FState <> jsKey then
   begin
     Result := False;
     Exit;
@@ -1905,17 +1909,17 @@ begin
 
   Result := StrInternal(K);
   FSkip  := false;
-  if FState <> jnError then
+  if FState <> jsError then
     Advance;
 end;
 
 function TJsonReader.KeyBuf(out Buf; BufSize: SizeInt): SizeInt;
 begin
-  if FState <> jnKey then
+  if FState <> jsKey then
   begin
     Result := -1;
     Exit;
-  end;    
+  end;
 
   Result := StrBufInternal(Buf, BufSize);
   FSkip  := false;
@@ -1926,7 +1930,7 @@ end;
 
 function TJsonReader.Str(out S: TJsonString): Boolean;
 begin
-  if FState <> jnString then
+  if FState <> jsString then
   begin
     Result := False;
     S := '';
@@ -1939,7 +1943,7 @@ end;
 
 function TJsonReader.StrBuf(out Buf; BufSize: SizeInt): SizeInt;
 begin
-  if FState <> jnString then
+  if FState <> jsString then
   begin
     Result := -1;
     Exit;
@@ -1959,7 +1963,7 @@ end;
 
 function TJsonReader.Number(out Num: integer): Boolean;
 begin
-  if (FState <> jnNumber) then
+  if (FState <> jsNumber) then
   begin
     Result := False;
     exit;
@@ -1973,7 +1977,7 @@ end;
 
 function TJsonReader.Number(out Num: int64): Boolean;
 begin
-  if (FState <> jnNumber) then
+  if (FState <> jsNumber) then
   begin
     Result := False;
     exit;
@@ -1987,7 +1991,7 @@ end;
 
 function TJsonReader.Number(out Num: uint64): Boolean;
 begin
-  if (FState <> jnNumber) then
+  if (FState <> jsNumber) then
   begin
     Result := False;
     exit;
@@ -2006,7 +2010,7 @@ begin
   FormatSettings.DecimalSeparator := '.';
   FormatSettings.ThousandSeparator := #0;
 
-  if FState <> jnNumber then
+  if FState <> jsNumber then
   begin
     Result := False;
     exit;
@@ -2032,7 +2036,7 @@ end;
 
 function TJsonReader.Bool(out Bool: Boolean): Boolean;
 begin
-  if FState <> jnBoolean then
+  if FState <> jsBoolean then
   begin
     Result := false;
     exit;
@@ -2047,13 +2051,13 @@ begin
   StackPop;
   Reduce;
 
-  Result := true;   
+  Result := true;
   FSkip  := false;
 end;
 
 function TJsonReader.Null: Boolean;
 begin
-  if FState <> jnNull then
+  if FState <> jsNull then
   begin
     Result := false;
     exit;
@@ -2070,7 +2074,7 @@ end;
 
 function TJsonReader.Dict: Boolean;
 begin
-  if FState <> jnDict then
+  if FState <> jsDict then
   begin
     Result := False;
     Exit;
@@ -2081,7 +2085,7 @@ end;
 
 function TJsonReader.List: Boolean;
 begin
-  if FState <> jnList then
+  if FState <> jsList then
   begin
     Result := False;
     Exit;
@@ -2092,7 +2096,7 @@ end;
 
 function TJsonReader.Error: Boolean;
 begin
-  Result := FState = jnError;
+  Result := FState = jsError;
 end;
 
 { TJsonWriter }
@@ -2107,7 +2111,7 @@ begin
   FFeatures      := Features;
   FPrettyPrint   := PrettyPrint;
   FIndentation   := Indentation;
-  StackPush(jsInitial);
+  StackPush(jisInitial);
 end;
 
 procedure TJsonWriter.WriteSeparator(Indent: Boolean);
@@ -2209,7 +2213,7 @@ begin
       begin
         Escaped[o] := '\';
         Escaped[o+1] := _Buf[i];
-        Inc(o, 2);  
+        Inc(o, 2);
         Inc(i);
       end
       else if (_Buf[i] in [#10, #13]) or
@@ -2231,7 +2235,7 @@ begin
             Escaped[o+5] :=  HexDigits[Ord(_Buf[i]) and $f];
             Inc(o, 6);
           end;
-        end;   
+        end;
         Inc(i);
       end
       else
@@ -2248,29 +2252,29 @@ end;
 
 procedure TJsonWriter.KeyBegin;
 begin
-  if StackTop <> jsDictItem then
+  if StackTop <> jisDictItem then
     raise EJsonWriterSyntaxError.Create('Unexpected key.');
 end;
 
 procedure TJsonWriter.KeyEnd;
 begin
-  Assert(StackTop = jsDictKey);
+  Assert(StackTop = jisDictKey);
   StackPop;
-  StackPush(jsDictValue);
+  StackPush(jisDictValue);
 end;
 
 procedure TJsonWriter.ValueBegin(const Kind: String);
 begin
-  if not (StackTop in [jsInitial, jsListItem, jsDictValue]) then
+  if not (StackTop in [jisInitial, jisListItem, jisDictValue]) then
     raise EJsonWriterSyntaxError.CreateFmt('Unexpected %s', [Kind]);
 end;
 
 procedure TJsonWriter.ValueEnd;
 begin
   case StackPop of
-    jsInitial:   StackPush(jsEOF);
-    jsListItem:  StackPush(jsListItem);
-    jsDictValue: StackPush(jsDictItem);
+    jisInitial:   StackPush(jisEOF);
+    jisListItem:  StackPush(jisListItem);
+    jisDictValue: StackPush(jisDictItem);
     else         assert(false);
   end;
 end;
@@ -2302,14 +2306,14 @@ begin
   StrBufInternal(PJsonChar(nil)^, 0, true);
 
   StackPop;
-  StackPush(jsDictValue);
+  StackPush(jisDictValue);
 end;
 
 procedure TJsonWriter.KeyBuf(const Buf; BufSize: SizeInt);
 var
   IsEnd: Boolean;
 begin
-  IsEnd := (BufSize = 0) and (StackTop = jsDictKey);
+  IsEnd := (BufSize = 0) and (StackTop = jisDictKey);
 
   if not IsEnd then
     KeyBegin;
@@ -2334,7 +2338,7 @@ procedure TJsonWriter.StrBuf(const Buf; BufSize: SizeInt);
 var
   IsEnd: Boolean;
 begin
-  IsEnd := (BufSize = 0) and (StackTop = jsDictKey);
+  IsEnd := (BufSize = 0) and (StackTop = jisDictKey);
 
   if not IsEnd then
     ValueBegin('string');
@@ -2373,7 +2377,7 @@ begin
 
   WriteSeparator;
   Write(UIntToStr(Num));
-  FNeedComma := true;  
+  FNeedComma := true;
 
   ValueEnd;
 end;
@@ -2418,7 +2422,7 @@ begin
   else
     Write(FloatToStr(Num, fs));
 
-  FNeedComma := true;  
+  FNeedComma := true;
 
   ValueEnd;
 end;
@@ -2432,7 +2436,7 @@ begin
     Write('true')
   else
     Write('false');
-  FNeedComma := true;   
+  FNeedComma := true;
 
   ValueEnd;
 end;
@@ -2443,26 +2447,26 @@ begin
 
   WriteSeparator;
   Write('null');
-  FNeedComma := true;   
+  FNeedComma := true;
 
   ValueEnd;
 end;
 
 procedure TJsonWriter.Dict;
 begin
-  ValueBegin('dict'); 
-  StackPush(jsDictItem);
+  ValueBegin('dict');
+  StackPush(jisDictItem);
 
   WriteSeparator;
   Write('{');
-  FNeedComma := false;    
-  FStructEmpty := true;   
+  FNeedComma := false;
+  FStructEmpty := true;
   Inc(FLevel);
 end;
 
 procedure TJsonWriter.DictEnd;
 begin
-  if StackTop <> jsDictItem then
+  if StackTop <> jisDictItem then
     raise EJsonWriterSyntaxError.Create('Unexpected dict end.');
 
   FNeedComma := false;
@@ -2474,7 +2478,7 @@ begin
     WriteSeparator;
   end;
   Write('}');
-  FNeedComma := true;   
+  FNeedComma := true;
   FStructEmpty := false;
 
   StackPop;
@@ -2482,20 +2486,20 @@ begin
 end;
 
 procedure TJsonWriter.List;
-begin      
+begin
   ValueBegin('list');
-  StackPush(jsListItem);
+  StackPush(jisListItem);
 
   WriteSeparator;
   Write('[');
   FNeedComma := false;
-  FStructEmpty := true;    
+  FStructEmpty := true;
   Inc(FLevel);
 end;
 
 procedure TJsonWriter.ListEnd;
-begin                    
-  if StackTop <> jsListItem then
+begin
+  if StackTop <> jisListItem then
     raise EJsonWriterSyntaxError.Create('Unexpected list end.');
 
   FNeedComma := false;
@@ -2507,8 +2511,8 @@ begin
     WriteSeparator;
   end;
   Write(']');
-  FNeedComma := true;  
-  FStructEmpty := false;   
+  FNeedComma := true;
+  FStructEmpty := false;
 
   StackPop;
   ValueEnd;

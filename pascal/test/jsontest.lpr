@@ -36,8 +36,8 @@ begin
       assert(num = i);
     end;
 
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -75,8 +75,8 @@ begin
       AssertTrue(num = i);
     end;
 
-    AssertTrue(Reader.Advance = jnDictEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsDictEnd);
+    AssertTrue(Reader.Advance = jsEOF);
 
   finally
     FreeAndNil(Stream);
@@ -145,10 +145,10 @@ begin
       AssertTrue(num = i);
     end;
 
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnDictEnd);
-    AssertTrue(Reader.Advance = jnDictEnd);
-    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsDictEnd);
+    AssertTrue(Reader.Advance = jsDictEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
@@ -171,7 +171,7 @@ begin
     AssertTrue(Reader.Number(num));
     AssertTrue(num = 2);
 
-    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
@@ -186,7 +186,7 @@ begin
     AssertTrue(Reader.Number(num));
     AssertTrue(num = 4);
 
-    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
@@ -194,7 +194,7 @@ begin
 
     assert(num = 5);
 
-    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
@@ -210,10 +210,10 @@ begin
     AssertTrue(Reader.Number(num));
     AssertTRue(num = 7);
 
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnDictEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsDictEnd);
+    AssertTrue(Reader.Advance = jsEOF);
 
   finally
     FreeAndNil(Stream);
@@ -255,13 +255,13 @@ begin
 
     Reader.Advance;
 
-    AssertTrue(Reader.State = jnDictEnd);
+    AssertTrue(Reader.State = jsDictEnd);
 
     Reader.Advance;
 
     // 1st error
 
-    AssertTrue(Reader.State = jnError);
+    AssertTrue(Reader.State = jsError);
 
     Reader.Proceed;
     Reader.Advance;
@@ -287,9 +287,9 @@ begin
 
     Reader.Proceed;
 
-    AssertTrue(Reader.State = jnNull);
+    AssertTrue(Reader.State = jsNull);
 
-    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jsDictEnd);
 
     // 3rd error
 
@@ -316,8 +316,8 @@ begin
 
     Reader.Proceed;
 
-    AssertTrue(Reader.Advance = jnDictEnd);
-    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jsDictEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
 
     // 5th error
 
@@ -326,7 +326,7 @@ begin
 
     Reader.Proceed;
 
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsEOF);
 
   finally
     FreeAndNil(Stream);
@@ -367,8 +367,8 @@ begin
     AssertTrue(Reader.Number(num));
     AssertTrue(num = 6);
 
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -402,7 +402,7 @@ begin
 
     Reader.Skip;
 
-    AssertTrue(Reader.Advance = jnError);
+    AssertTrue(Reader.Advance = jsError);
 
     AssertTrue(Reader.Proceed);
     AssertTrue(Reader.Proceed);
@@ -410,8 +410,8 @@ begin
     AssertTrue(Reader.Number(num));
     AssertTrue(num = 3);
 
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -451,8 +451,8 @@ begin
     AssertTrue(Reader.Bool(b));
     AssertTrue(b);
 
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -493,8 +493,8 @@ begin
     AssertTrue(Reader.Bool(b));
     AssertTrue(not b);
 
-    AssertTrue(Reader.Advance = jnDictEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsDictEnd);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -543,8 +543,8 @@ begin
     AssertTrue(Reader.Number(u64));
     AssertTrue(u64 = uint64(9223372036854775808));
 
-    AssertTrue(Reader.Advance = jnListEnd);
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsListEnd);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -571,7 +571,7 @@ begin
     AssertTrue(Reader.Str(str));
     AssertTrue(str = expected);
 
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -604,7 +604,7 @@ begin
     AssertTrue(Reader.Str(str));
     AssertTrue(str = expected);
 
-    AssertTrue(Reader.Advance = jnEOF);
+    AssertTrue(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -629,7 +629,7 @@ begin
 
     AssertTrue(Reader.List);
 
-    AssertTrue(Reader.Advance = jnString);
+    AssertTrue(Reader.Advance = jsString);
 
     buf := '';
     SetLength(buf, 5);
@@ -644,7 +644,7 @@ begin
     n := Reader.StrBuf(buf[1], 5);
     AssertTrue((n = 0));
 
-    AssertTrue(Reader.Advance = jnString);
+    AssertTrue(Reader.Advance = jsString);
 
     // Hello A World
     n := Reader.StrBuf(buf[1], 5);
@@ -656,7 +656,7 @@ begin
     n := Reader.StrBuf(buf[1], 5);
     AssertTrue((n = 0));
 
-    AssertTrue(Reader.Advance = jnString);
+    AssertTrue(Reader.Advance = jsString);
 
     // ABCD\n\rEF
     n := Reader.StrBuf(buf[1], 5);
@@ -666,13 +666,13 @@ begin
     n := Reader.StrBuf(buf[1], 5);
     AssertTrue((n = 0));
 
-    AssertTrue(Reader.Advance = jnString);
+    AssertTrue(Reader.Advance = jsString);
 
     // ""
     n := Reader.StrBuf(buf[1], 5);
     AssertTrue(n = 0);
 
-    AssertTrue(Reader.Advance = jnString);
+    AssertTrue(Reader.Advance = jsString);
 
     // Hellö Wörld
     n := Reader.StrBuf(buf[1], 5);
@@ -684,7 +684,7 @@ begin
     n := Reader.StrBuf(buf[1], 5);
     AssertTrue((n = 0));
 
-    AssertTrue(Reader.Advance = jnListEnd);
+    AssertTrue(Reader.Advance = jsListEnd);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -710,7 +710,7 @@ begin
 
     AssertTrue(Reader.Dict);
 
-    AssertTrue(Reader.Advance = jnKey);
+    AssertTrue(Reader.Advance = jsKey);
 
     buf := '';
     SetLength(buf, 5);
@@ -728,7 +728,7 @@ begin
     AssertTrue(Reader.Number(int));
     AssertTrue(int = 1);
 
-    AssertTrue(Reader.Advance = jnKey);
+    AssertTrue(Reader.Advance = jsKey);
 
     // Hello A World
     n := Reader.KeyBuf(buf[1], 5);
@@ -743,7 +743,7 @@ begin
     AssertTrue(Reader.Number(int));
     AssertTrue(int = 2);
 
-    AssertTrue(Reader.Advance = jnKey);
+    AssertTrue(Reader.Advance = jsKey);
 
     // ABCD\n\rEF
     n := Reader.KeyBuf(buf[1], 5);
@@ -756,7 +756,7 @@ begin
     AssertTrue(Reader.Number(int));
     AssertTrue(int = 3);
 
-    AssertTrue(Reader.Advance = jnKey);
+    AssertTrue(Reader.Advance = jsKey);
 
     // ""
     n := Reader.KeyBuf(buf[1], 5);
@@ -765,7 +765,7 @@ begin
     AssertTrue(Reader.Number(int));
     AssertTrue(int = 4);
 
-    AssertTrue(Reader.Advance = jnKey);
+    AssertTrue(Reader.Advance = jsKey);
 
     // Hellö Wörld
     n := Reader.KeyBuf(buf[1], 5);
@@ -780,7 +780,7 @@ begin
     AssertTrue(Reader.Number(int));
     AssertTrue(int = 5);
 
-    AssertTrue(Reader.Advance = jnDictEnd);
+    AssertTrue(Reader.Advance = jsDictEnd);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -837,7 +837,7 @@ var
   procedure ReadList;
   begin
     Writer.List;
-    while Reader.Advance <> jnListEnd do
+    while Reader.Advance <> jsListEnd do
       ReadValue;
     Writer.ListEnd;
   end;
@@ -848,7 +848,7 @@ var
   begin
     Writer.Dict;
 
-    while Reader.Advance <> jnDictEnd do
+    while Reader.Advance <> jsDictEnd do
     begin
       repeat
         if Reader.Key(Key) then

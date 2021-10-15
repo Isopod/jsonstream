@@ -36,7 +36,7 @@ begin
   Stream := TStringStream.Create('["Hello", "World", 42]');
   Reader := TJsonReader.Create(Stream);
   if Reader.List then
-    while Reader.Advance <> jnListEnd do
+    while Reader.Advance <> jsListEnd do
     begin
       if Reader.Str(s) then
         WriteLn(s)
@@ -50,7 +50,7 @@ begin
   Stream := TStringStream.Create('{"hello": "world", "number": 3.14}');
   Reader := TJsonReader.Create(Stream);
   if Reader.Dict then
-    while Reader.Advance <> jnDictEnd do
+    while Reader.Advance <> jsDictEnd do
     begin
       // Note: In the real world you should check the return value of
       // Key(), because it can return false in case of a parse error.

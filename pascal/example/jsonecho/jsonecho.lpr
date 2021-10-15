@@ -27,7 +27,7 @@ function ReadValue: Boolean; forward;
 procedure ReadList;
 begin
   Writer.List;
-  while Reader.Advance <> jnListEnd do
+  while Reader.Advance <> jsListEnd do
     ReadValue;
   Writer.ListEnd;
 end;
@@ -38,7 +38,7 @@ var
 begin
   Writer.Dict;
 
-  while Reader.Advance <> jnDictEnd do
+  while Reader.Advance <> jsDictEnd do
   begin
     repeat
       if Reader.Key(Key) then

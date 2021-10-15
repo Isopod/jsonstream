@@ -29,7 +29,7 @@ begin
     exit(nil);
 
   Result := TObjectList.Create;
-  while Reader.Advance <> jnListEnd do
+  while Reader.Advance <> jsListEnd do
     Result.Add(ParseRegion(Reader));
 end;
 
@@ -41,7 +41,7 @@ begin
     exit(nil);
 
   Result := TRegion.Create;
-  while Reader.Advance <> jnDictEnd do
+  while Reader.Advance <> jsDictEnd do
   begin
     if not Reader.Key(Key) then
       continue;

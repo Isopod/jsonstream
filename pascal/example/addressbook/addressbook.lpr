@@ -104,7 +104,7 @@ begin
   if not Reader.Dict then
     raise EMarkupError.Create;
 
-  while Reader.Advance <> jnDictEnd do
+  while Reader.Advance <> jsDictEnd do
   begin
     if not Reader.Key(Key) then
       raise EMarkupError.Create;
@@ -157,7 +157,7 @@ begin
   if not Reader.Dict then
     raise EMarkupError.Create;
 
-  while Reader.Advance <> jnDictEnd do
+  while Reader.Advance <> jsDictEnd do
   begin
     if not Reader.Key(Key) then
       raise EMarkupError.Create;
@@ -169,7 +169,7 @@ begin
     else if Key = 'LastName' then
       Result.LastName := DeserializeStr(Reader)
     else if (Key = 'PhoneNumbers') and Reader.List then
-      while Reader.Advance <> jnListEnd do
+      while Reader.Advance <> jsListEnd do
         Result.PhoneNumbers.Add(DeserializePhoneNumber(Reader))
     else if (Key = 'Birthday') and not Reader.Null then
     begin
@@ -205,12 +205,12 @@ begin
   if not Reader.Dict then
     raise EMarkupError.Create;
 
-  while Reader.Advance <> jnDictEnd do
+  while Reader.Advance <> jsDictEnd do
   begin
     if not Reader.Key(Key) then
       raise EMarkupError.Create;
     if (Key = 'Contacts') and Reader.List then
-      while Reader.Advance <> jnListEnd do
+      while Reader.Advance <> jsListEnd do
         Result.Contacts.Add(DeserializeContact(Reader));
   end;
 end;
