@@ -2338,7 +2338,7 @@ procedure TJsonWriter.StrBuf(const Buf; BufSize: SizeInt);
 var
   IsEnd: Boolean;
 begin
-  IsEnd := (BufSize = 0) and (StackTop = jisDictKey);
+  IsEnd := (BufSize = 0) and (StackTop = jisString);
 
   if not IsEnd then
     ValueBegin('string');
