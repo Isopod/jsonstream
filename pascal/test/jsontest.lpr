@@ -1442,21 +1442,32 @@ end;
 
 begin
   SetMultiByteConversionCodePage(CP_UTF8);
+  try
+    TestList;
+    TestDict;
+    TestDictsListsMix;
+    TestErrorRecovery;
+    TestSkip;
+    TestSkipWithErrors;
+    TestBoolean;
+    TestBoolsInDict;
+    TestNumbers;
+    TestEscapeSequences;
+    TestInvalidEscapeSequences;
+    TestStrBuf;
+    TestKeyBuf;
+    TestSamples;
 
-  TestList;
-  TestDict;
-  TestDictsListsMix;
-  TestErrorRecovery;
-  TestSkip;
-  TestSkipWithErrors;
-  TestBoolean;
-  TestBoolsInDict;
-  TestNumbers;
-  TestEscapeSequences;
-  TestInvalidEscapeSequences;
-  TestStrBuf;
-  TestKeyBuf;
-  TestSamples;
+    WriteLn('All tests succeeded.');
+    ExitCode := 0;
+  except
+    on E: Exception do
+    begin
+      WriteLn('A test FAILED!');
+      DumpExceptionBackTrace(Output);
+      ExitCode := -1;
+    end;
+  end;
 end.
 
 
