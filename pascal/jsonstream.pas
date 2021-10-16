@@ -2400,7 +2400,7 @@ begin
 
   WriteSeparator;
   if jfJson5 in FFeatures then
-    Write('0x'+IntToHex(Num))
+    Write('0x'+IntToHex(Num, 1))
   else
     Write(IntToStr(Num));
   FNeedComma := true;
