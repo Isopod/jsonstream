@@ -68,7 +68,7 @@ begin
   // 5. Create formatted JSON output
   WriteLn;
   WriteLn('Example 5');
-  Stream := TStringStream.Create;
+  Stream := TStringStream.Create('');
   Writer := TJsonWriter.Create(Stream,[],true);
   Writer.List;
     Writer.Str('Foo');
