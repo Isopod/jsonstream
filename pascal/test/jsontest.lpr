@@ -787,6 +787,61 @@ begin
   end;
 end;
 
+
+procedure TestIntRanges;
+var          
+  Stream: TStream;
+  Reader: TJsonReader;
+  i32: Int32;
+  u32: UInt32;
+  i64: Int64;
+  u64: UInt64;
+  dbl: Double;
+const
+  sample = '[7795000000, 2147483648, 9223372036854775808, 18446744073709551616]';
+begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(sample);
+    Reader := TJsonReader.Create(Stream);
+
+    Reader.List; 
+    Reader.Advance;
+
+    AssertTrue(not Reader.Number(i32));
+    AssertTrue(not Reader.Number(u32));
+    AssertTrue(Reader.Number(i64));
+    AssertTrue(i64 = 7795000000);
+
+    Reader.Advance;
+
+    AssertTrue(not Reader.Number(i32));
+    AssertTrue(Reader.Number(u32));
+    AssertTrue(u32 = 2147483648);
+
+    Reader.Advance;
+
+    AssertTrue(not Reader.Number(i32));
+    AssertTrue(not Reader.Number(u32));
+    AssertTrue(not Reader.Number(i64));
+    AssertTrue(Reader.Number(u64));
+    AssertTrue(u64 = 9223372036854775808);
+
+    Reader.Advance;
+
+    AssertTrue(not Reader.Number(i32));
+    AssertTrue(not Reader.Number(u32));
+    AssertTrue(not Reader.Number(i64));
+    AssertTrue(not Reader.Number(u64));
+    AssertTrue(Reader.Number(dbl));
+    AssertTrue(dbl = 18446744073709551616.0);
+  finally  
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
 type
   TExpectedError = record
     Pos: integer;
@@ -1456,6 +1511,7 @@ begin
     TestInvalidEscapeSequences;
     TestStrBuf;
     TestKeyBuf;
+    TestIntRanges;
     TestSamples;
 
     WriteLn('All tests succeeded.');

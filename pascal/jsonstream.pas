@@ -1,6 +1,8 @@
 unit jsonstream;
 
+{$ifdef FPC}
 {$mode Delphi}
+{$endif}
 
 interface
 
@@ -268,6 +270,10 @@ type
     // return true once per element.
     function  Number(out Num: integer): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
+    // represented by an integer and returns its value in Num. This function only
+    // return true once per element.
+    function  Number(out Num: cardinal): Boolean; overload;
+    // Returns true iff the current element is a number that can be exactly
     // represented by an int64 and returns its value in Num. This function only
     // returns true once per element.
     function  Number(out Num: int64): Boolean; overload;
@@ -374,6 +380,7 @@ type
     //   StrBuf(..., 0); // Signal end of string
     procedure StrBuf(const Buf; BufSize: SizeInt);
     procedure Number(Num: integer); overload;
+    procedure Number(Num: cardinal); overload;
     procedure Number(Num: int64); overload;
     procedure Number(Num: uint64); overload;
     // Write number if hexadecimal format, if possible. This required jfJson5 to
@@ -393,8 +400,10 @@ implementation
 
 uses
   math
+  {$ifdef FPC}
   {$ifndef WIN32}
   , cwstring
+  {$endif}
   {$endif}
   ;
 
@@ -1976,6 +1985,21 @@ begin
 end;
 
 function TJsonReader.Number(out Num: integer): Boolean;
+{$ifdef FPC}
+{$if FPC_FULLVERSION < 30301}
+  // See https://gitlab.com/freepascal.org/fpc/source/-/issues/39406
+  function TryStrToInt(const s: string; Out i : integer): Boolean;
+  var
+    Error : word;
+    li : Int64;
+  begin
+    Val(s, li, Error);
+    Result := (Error=0) and (li <= High(i)) and (li >= Low(i));
+    if Result then
+      i := li;
+  end;
+{$endif}
+{$endif}
 begin
   if (FState <> jsNumber) then
   begin
@@ -1984,6 +2008,35 @@ begin
   end;
 
   Result := TryStrToInt(FNumber, Num);
+
+  if Result then
+    FinalizeNumber;
+end;
+
+function TJsonReader.Number(out Num: cardinal): Boolean;
+{$ifdef FPC}
+{$if FPC_FULLVERSION < 30301}
+  // See https://gitlab.com/freepascal.org/fpc/source/-/issues/39406
+  function TryStrToDWord(const s: string; Out i : cardinal): Boolean;
+  var
+    Error : word;
+    li : UInt64;
+  begin
+    Val(s, li, Error);
+    Result := (Error=0) and (li <= High(i)) and (li >= Low(i));
+    if Result then
+      i := li;
+  end;
+{$endif}
+{$endif}
+begin
+  if (FState <> jsNumber) then
+  begin
+    Result := False;
+    exit;
+  end;
+
+  Result := TryStrToDWord(FNumber, Num);
 
   if Result then
     FinalizeNumber;
@@ -2210,6 +2263,8 @@ begin
     end;
   end;
 
+  Escaped[0] := #0; // Shut up compiler warning
+
   i := 0;
 
   while i < BufSize do
@@ -2258,7 +2313,7 @@ begin
       end;
     end;
 
-    WriteBuf(Escaped, SizeOf(Escaped[0]) * o);
+    WriteBuf(Escaped[0], SizeOf(Escaped[0]) * o);
   end;
 end;
 
@@ -2370,6 +2425,11 @@ begin
   FNeedComma := true;
 
   ValueEnd;
+end;
+
+procedure TJsonWriter.Number(Num: cardinal);
+begin
+  Number(uint64(Num));
 end;
 
 procedure TJsonWriter.Number(Num: int64);
