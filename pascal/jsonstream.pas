@@ -392,7 +392,11 @@ type
 implementation
 
 uses
-  math, cwstring;
+  math
+  {$ifndef WIN32}
+  , cwstring
+  {$endif}
+  ;
 
 type
   TJsonCharArray =
@@ -2007,7 +2011,7 @@ begin
     exit;
   end;
 
-  Result := TryStrToUInt64(FNumber, Num);
+  Result := TryStrToQWord(FNumber, Num);
 
   if Result then
     FinalizeNumber;
@@ -2384,7 +2388,7 @@ begin
   ValueBegin('number');
 
   WriteSeparator;
-  Write(UIntToStr(Num));
+  Write(IntToStr(Num));
   FNeedComma := true;
 
   ValueEnd;
@@ -2398,7 +2402,7 @@ begin
   if jfJson5 in FFeatures then
     Write('0x'+IntToHex(Num))
   else
-    Write(UIntToStr(Num));
+    Write(IntToStr(Num));
   FNeedComma := true;
 
   ValueEnd;
