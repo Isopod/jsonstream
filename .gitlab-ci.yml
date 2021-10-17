@@ -1,0 +1,91 @@
+# Fedora
+stages:
+  - build
+  - test
+
+fedora-build:
+  stage: build
+  image: fedora-lazarus
+  script:
+    - lazbuild pascal/package/jsonstreampkg.lpk
+    - lazbuild pascal/test/jsontest.lpr
+    - lazbuild pascal/example/helloworld/helloworld.lpr
+    - lazbuild pascal/example/addressbook/addressbook.lpr
+    - lazbuild pascal/example/jsonecho/jsonecho.lpr
+    - lazbuild pascal/example/recursive/recursive.lpr
+  artifacts:
+    paths:
+      - "pascal/test/jsontest"
+      - "pascal/examples/helloworld/helloworld"
+      - "pascal/examples/addressbook/addressbook"
+      - "pascal/examples/jsonecho/jsonecho"
+      - "pascal/examples/recursive/recursive"
+
+fedora-test:
+  stage: test
+  needs: [fedora-build]
+  image: fedora-lazarus
+  script:
+    - pascal/test/jsontest
+
+# Win32
+
+win32-build:
+  stage: build
+  variables:
+    CI_VM_IMAGE: win10-lazarus
+  tags:
+    - win32
+  script:
+    - C:\\lazarus\\lazbuild pascal/package/jsonstreampkg.lpk
+    - C:\\lazarus\\lazbuild pascal/test/jsontest.lpr
+    - C:\\lazarus\\lazbuild pascal/example/helloworld/helloworld.lpr
+    - C:\\lazarus\\lazbuild pascal/example/addressbook/addressbook.lpr
+    - C:\\lazarus\\lazbuild pascal/example/jsonecho/jsonecho.lpr
+    - C:\\lazarus\\lazbuild pascal/example/recursive/recursive.lpr
+  artifacts:
+    paths:
+      - "pascal/test/jsontest.exe"
+      - "pascal/example/helloworld/helloworld.exe"
+      - "pascal/example/addressbook/addressbook.exe"
+      - "pascal/example/jsonecho/jsonecho.exe"
+      - "pascal/example/recursive/recursive.exe"
+
+win32-test:
+  stage: test
+  variables:
+    CI_VM_IMAGE: win10-lazarus
+  needs: [win32-build]
+  tags:
+    - win32
+  script:
+    - pascal/test/jsontest
+
+# MacOS
+
+macos-build:
+  stage: build
+  tags:
+    - macos
+  script:
+    - /Applications/Lazarus/lazbuild pascal/package/jsonstreampkg.lpk
+    - /Applications/Lazarus/lazbuild pascal/test/jsontest.lpr
+    - /Applications/Lazarus/lazbuild pascal/example/helloworld/helloworld.lpr
+    - /Applications/Lazarus/lazbuild pascal/example/addressbook/addressbook.lpr
+    - /Applications/Lazarus/lazbuild pascal/example/jsonecho/jsonecho.lpr
+    - /Applications/Lazarus/lazbuild pascal/example/recursive/recursive.lpr
+  artifacts:
+    paths:
+      - "pascal/test/jsontest"
+      - "pascal/example/helloworld/helloworld"
+      - "pascal/example/addressbook/addressbook"
+      - "pascal/example/jsonecho/jsonecho"
+      - "pascal/example/recursive/recursive"
+
+macos-test:
+  stage: test
+  needs: [macos-build]
+  tags:
+    - macos
+  script:
+    - pascal/test/jsontest
