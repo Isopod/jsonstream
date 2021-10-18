@@ -67,6 +67,7 @@ macos-build:
   stage: build
   tags:
     - macos
+  when: manual
   script:
     - /Applications/Lazarus/lazbuild pascal/package/jsonstreampkg.lpk
     - /Applications/Lazarus/lazbuild pascal/test/jsontest.lpr
