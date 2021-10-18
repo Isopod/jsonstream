@@ -1,3 +1,24 @@
+// JsonStream Pascal Implementation v0.9.x
+//
+// Copyright 2021 Philip Zander
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software is furnished to do so,
+// subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+// FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+// IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 unit jsonstream;
 
 {$ifdef FPC}
@@ -86,9 +107,9 @@ type
     FStream:           TStream;
     FBuf:              array[0..1023] of TJsonChar;
     // Length of FBuf
-    FLen:              integer;
+    FLen:              Integer;
     // Position within FBuf
-    FPos:              integer;
+    FPos:              Integer;
     // Offset of FBuf within the stream (only used for error information)
     FOffset:           SizeInt;
 
@@ -130,7 +151,7 @@ type
     FStringEnd:        Boolean;
     // If Proceed was called after a string error: Tell string routines to
     // ignore the error.
-    FStrIgnoreError:   boolean;
+    FStrIgnoreError:   Boolean;
     // Temporary storage for decoded escape sequences.
     FEscapeSequence:   TJsonString;
 
@@ -140,14 +161,14 @@ type
     // and an error is generated if the maximum nesting depth is exceeded. The
     // purpose of this is to guarantee an upper bound on memory consumption that
     // doesn't grow linearly with the input in the worst case.
-    FNestingDepth:     integer;
-    FMaxNestingDepth:  integer;
+    FNestingDepth:     Integer;
+    FMaxNestingDepth:  Integer;
 
     // === Error recovery ===
     // Stack depth up until which we must pop after an error.
-    FPopUntil:         integer;
+    FPopUntil:         Integer;
     // Stack depth up until which a skip was issued.
-    FSkipUntil:        integer;
+    FSkipUntil:        Integer;
     // Whether current item should be skipped upon next call to Advance.
     FSkip:             Boolean;
 
@@ -166,7 +187,7 @@ type
     procedure Reduce;
 
     // Parsing helpers
-    procedure RefillBuffer(LookAhead: integer = 1);
+    procedure RefillBuffer(LookAhead: Integer = 1);
     procedure SkipSpace;
     procedure SkipGarbage;
     procedure SkipSingleLineComment;
@@ -201,7 +222,7 @@ type
     // MaxNestingDepth. If this depth is exceeded, the parser will abort.
     constructor Create(
       Stream: TStream; Features: TJsonFeatures=[];
-      MaxNestingDepth: integer=MaxInt
+      MaxNestingDepth: Integer=MaxInt
     );
 
     // === General traversal ===
@@ -268,24 +289,24 @@ type
     // Returns true iff the current element is a number that can be exactly
     // represented by an integer and returns its value in Num. This function only
     // return true once per element.
-    function  Number(out Num: integer): Boolean; overload;
+    function  Number(out Num: Integer): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
     // represented by an integer and returns its value in Num. This function only
     // return true once per element.
-    function  Number(out Num: cardinal): Boolean; overload;
+    function  Number(out Num: Cardinal): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
     // represented by an int64 and returns its value in Num. This function only
     // returns true once per element.
-    function  Number(out Num: int64): Boolean; overload;
+    function  Number(out Num: Int64): Boolean; overload;
     // Returns true iff the current element is a number that can be exactly
     // represented by an uint64 and returns its value in Num. This function only
     // returns true once per element.
-    function  Number(out Num: uint64): Boolean; overload;
+    function  Number(out Num: UInt64): Boolean; overload;
     // Returns true iff the current element is a number and returns its value
     // in Num. If the number exceeds the representable precision or range of a
     // double precision float, it will be rounded to the closest approximation.
     // This function only returns true once per element.
-    function  Number(out Num: double): Boolean; overload;
+    function  Number(out Num: Double): Boolean; overload;
 
     // Returns true iff the current element is a boolean and returns its value
     // in bool. This function only returns true once per element.
@@ -342,7 +363,7 @@ type
     FNeedColon:     Boolean;
     FStructEmpty:   Boolean;
     FWritingString: Boolean;
-    FLevel:         integer;
+    FLevel:         Integer;
     FFeatures:      TJsonFeatures;
 
     FPrettyPrint:   Boolean;
@@ -355,7 +376,7 @@ type
     procedure WriteBuf(const Buf; BufSize: SizeInt);
     procedure StrBufInternal(const Buf; BufSize: SizeInt; IsKey: Boolean);
 
-    procedure ValueBegin(const Kind: String);
+    procedure ValueBegin(const Kind: string);
     procedure ValueEnd;
     procedure KeyBegin;
     procedure KeyEnd;
@@ -379,15 +400,15 @@ type
     //   StrBuf(..., 0); // Write 0 bytes
     //   StrBuf(..., 0); // Signal end of string
     procedure StrBuf(const Buf; BufSize: SizeInt);
-    procedure Number(Num: integer); overload;
-    procedure Number(Num: cardinal); overload;
-    procedure Number(Num: int64); overload;
-    procedure Number(Num: uint64); overload;
+    procedure Number(Num: Integer); overload;
+    procedure Number(Num: Cardinal); overload;
+    procedure Number(Num: Int64); overload;
+    procedure Number(Num: UInt64); overload;
     // Write number if hexadecimal format, if possible. This required jfJson5 to
     // be included in Features. If jfJson5 is not included in Features, a
     // decimal number will be written, instead.
-    procedure NumberHex(Num: uint64); overload;
-    procedure Number(Num: double); overload;
+    procedure NumberHex(Num: UInt64); overload;
+    procedure Number(Num: Double); overload;
     procedure Bool(Bool: Boolean);
     procedure Null;
     procedure Dict;
@@ -432,7 +453,7 @@ begin
   Advance;
 end;
 
-procedure TJsonReader.RefillBuffer(LookAhead: integer);
+procedure TJsonReader.RefillBuffer(LookAhead: Integer);
 var
   Delta: LongInt;
 begin
@@ -459,10 +480,10 @@ end;
 type
   TSetOfChar = set of char;
 
-procedure SkipCharSet(Reader: TJsonReader; chars: TSetOfChar);
+procedure SkipCharSet(Reader: TJsonReader; Chars: TSetOfChar);
 begin
   repeat
-    while (Reader.FPos < Reader.FLen) and (Reader.FBuf[Reader.FPos] in chars) do
+    while (Reader.FPos < Reader.FLen) and (Reader.FBuf[Reader.FPos] in Chars) do
       Inc(Reader.FPos);
 
     if Reader.FPos < Reader.FLen then
@@ -552,7 +573,7 @@ const
 
 function TJsonReader.MatchString(const Str: TJsonString): Boolean;
 var
-  i: integer;
+  i: Integer;
 begin
   Result := false;
 
@@ -579,18 +600,18 @@ const
 procedure TJsonReader.ParseNumber;
 var
   Buf: array[0..768-1 + 1 { sign }] of TJsonChar;
-  i, n:   integer;
-  Exponent:  integer;
-  LeadingZeroes: integer;
-  TmpExp:   integer;
-  TmpExpSign: integer;
+  i, n:          Integer;
+  Exponent:      Integer;
+  LeadingZeroes: Integer;
+  TmpExp:        Integer;
+  TmpExpSign:    Integer;
 
 label
   Finalize;
 
-  function SkipZero: integer;
+  function SkipZero: Integer;
   var
-    j: integer;
+    j: Integer;
   begin
     Result := 0;
     while (FBuf[FPos] = '0') do
@@ -606,12 +627,12 @@ label
     end;
   end;
 
-  function ReadDigits(Digits: TSetOfChar=['0'..'9']): integer;
+  function ReadDigits(Digits: TSetOfChar=['0'..'9']): Integer;
   var
-    j: integer;
+    j: Integer;
   begin
     Result := 0;
-    while (FLen >{=} 0) and (FBuf[FPos] in Digits) do
+    while (FLen > 0) and (FBuf[FPos] in Digits) do
     begin
       for j := FPos to FLen - 1 do
       begin
@@ -629,9 +650,9 @@ label
     end;
   end;
 begin
-  n        := 0;
-  Exponent := 0;
-  FNumber  := '';
+  n          := 0;
+  Exponent   := 0;
+  FNumber    := '';
   FNumberErr := false;
 
   RefillBuffer(2);
@@ -917,7 +938,7 @@ end;
 
 function TJsonReader.Advance: TJsonState;
 var
-  NewSkip: integer;
+  NewSkip:      Integer;
   BeenSkipping: Boolean;
 begin
   if StackTop in [jisListHead, jisDictHead] then
@@ -1234,7 +1255,7 @@ end;
 
 function TJsonReader.InternalProceed: Boolean;
 var
-  i: integer;
+  i: Integer;
   Needle: set of TJsonInternalState;
 begin
   Result := false;
@@ -1267,7 +1288,6 @@ begin
       StackPush(jisString);
       FState := jsString;
     end;
-    //FFauxString := true;
     if FBuf[FPos] = '''' then
     begin
       FStringMode := jsmSingleQuoted;
@@ -1458,11 +1478,11 @@ end;
 function TJsonReader.StrBufInternal(out Buf; BufSize: SizeInt): SizeInt;
 var
   i0, i1, o0, o1: SizeInt;
-  l: SizeInt;
-  StopChars: set of char;
-  uc: Cardinal;
-  k, n: integer;
-  _Buf: TJsonCharArray absolute Buf;
+  l:              SizeInt;
+  StopChars:      set of char;
+  uc:             Cardinal;
+  k, n:           Integer;
+  _Buf:           TJsonCharArray absolute Buf;
 label
   return;
 
@@ -1771,7 +1791,7 @@ begin
   end;
 end;
 
-function TJsonReader.AcceptValue: boolean;
+function TJsonReader.AcceptValue: Boolean;
 begin
   Result := false;
   case FToken of
@@ -1869,7 +1889,7 @@ begin
   end;
 end;
 
-function TJsonReader.AcceptKey: boolean;
+function TJsonReader.AcceptKey: Boolean;
 begin
   Result := false;
   case FToken of
@@ -1984,7 +2004,7 @@ begin
   Reduce;
 end;
 
-function TJsonReader.Number(out Num: integer): Boolean;
+function TJsonReader.Number(out Num: Integer): Boolean;
 {$ifdef FPC}
 {$if FPC_FULLVERSION < 30301}
   // See https://gitlab.com/freepascal.org/fpc/source/-/issues/39406
@@ -2013,14 +2033,14 @@ begin
     FinalizeNumber;
 end;
 
-function TJsonReader.Number(out Num: cardinal): Boolean;
+function TJsonReader.Number(out Num: Cardinal): Boolean;
 {$ifdef FPC}
 {$if FPC_FULLVERSION < 30301}
   // See https://gitlab.com/freepascal.org/fpc/source/-/issues/39406
-  function TryStrToDWord(const s: string; Out i : cardinal): Boolean;
+  function TryStrToDWord(const s: string; Out i: Cardinal): Boolean;
   var
-    Error : word;
-    li : UInt64;
+    Error: Word;
+    li:    UInt64;
   begin
     Val(s, li, Error);
     Result := (Error=0) and (li <= High(i)) and (li >= Low(i));
@@ -2042,7 +2062,7 @@ begin
     FinalizeNumber;
 end;
 
-function TJsonReader.Number(out Num: int64): Boolean;
+function TJsonReader.Number(out Num: Int64): Boolean;
 begin
   if (FState <> jsNumber) then
   begin
@@ -2056,7 +2076,7 @@ begin
     FinalizeNumber;
 end;
 
-function TJsonReader.Number(out Num: uint64): Boolean;
+function TJsonReader.Number(out Num: UInt64): Boolean;
 begin
   if (FState <> jsNumber) then
   begin
@@ -2070,7 +2090,7 @@ begin
     FinalizeNumber;
 end;
 
-function TJsonReader.Number(out Num: double): Boolean;
+function TJsonReader.Number(out Num: Double): Boolean;
 var
   FormatSettings: TFormatSettings;
 begin
@@ -2181,7 +2201,7 @@ end;
 
 procedure TJsonWriter.WriteSeparator(Indent: Boolean);
 var
-  i: integer;
+  i: Integer;
 begin
   if FNeedColon then
     if FPrettyPrint then
@@ -2214,9 +2234,9 @@ end;
 
 procedure TJsonWriter.WriteBuf(const Buf; BufSize: SizeInt);
 var
-  i: SizeInt;
+  i:       SizeInt;
   Written: LongInt;
-  _Buf: TJsonCharArray absolute Buf;
+  _Buf:    TJsonCharArray absolute Buf;
 begin
   i := 0;
   while i < BufSize do
@@ -2238,9 +2258,9 @@ const
   HexDigits: array[0..15] of Char =
     ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f');
 var
-  Escaped: array[0 .. EntitySize * ChunkSize - 1] of TJsonChar;
+  Escaped:    array[0 .. EntitySize * ChunkSize - 1] of TJsonChar;
   i, j, o, n: SizeInt;
-  _Buf: TJsonCharArray absolute Buf;
+  _Buf:       TJsonCharArray absolute Buf;
 begin
   if not FWritingString then
   begin
@@ -2330,7 +2350,7 @@ begin
   StackPush(jisDictValue);
 end;
 
-procedure TJsonWriter.ValueBegin(const Kind: String);
+procedure TJsonWriter.ValueBegin(const Kind: string);
 begin
   if not (StackTop in [jisInitial, jisListItem, jisDictValue]) then
     raise EJsonWriterSyntaxError.CreateFmt('Unexpected %s', [Kind]);
@@ -2416,7 +2436,7 @@ begin
     ValueEnd;
 end;
 
-procedure TJsonWriter.Number(Num: integer);
+procedure TJsonWriter.Number(Num: Integer);
 begin
   ValueBegin('number');
 
@@ -2427,12 +2447,12 @@ begin
   ValueEnd;
 end;
 
-procedure TJsonWriter.Number(Num: cardinal);
+procedure TJsonWriter.Number(Num: Cardinal);
 begin
   Number(uint64(Num));
 end;
 
-procedure TJsonWriter.Number(Num: int64);
+procedure TJsonWriter.Number(Num: Int64);
 begin
   ValueBegin('number');
 
@@ -2443,7 +2463,7 @@ begin
   ValueEnd;
 end;
 
-procedure TJsonWriter.Number(Num: uint64);
+procedure TJsonWriter.Number(Num: UInt64);
 begin
   ValueBegin('number');
 
@@ -2454,7 +2474,7 @@ begin
   ValueEnd;
 end;
 
-procedure TJsonWriter.NumberHex(Num: uint64);
+procedure TJsonWriter.NumberHex(Num: UInt64);
 begin
   ValueBegin('number');
 
@@ -2468,7 +2488,7 @@ begin
   ValueEnd;
 end;
 
-procedure TJsonWriter.Number(Num: double);
+procedure TJsonWriter.Number(Num: Double);
 var
   fs: TFormatSettings;
 begin

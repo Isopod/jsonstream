@@ -1,12 +1,31 @@
+// Copyright 2021 Philip Zander
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy of
+// this software and associated documentation files (the "Software"), to deal in
+// the Software without restriction, including without limitation the rights to
+// use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+// the Software, and to permit persons to whom the Software is furnished to do so,
+// subject to the following conditions:
+//
+// The above copyright notice and this permission notice shall be included in all
+// copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+// FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+// COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+// IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+// CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 program jsontest;
 
 uses
-  sysutils, classes, jsonstream;
+  SysUtils, Classes, jsonstream;
 
-procedure AssertTrue(Cond: Boolean; const msg: string=''); inline;
+procedure Check(Cond: Boolean; const Msg: string=''); inline;
 begin
   if not Cond then
-    raise EAssertionFailed.Create(msg);
+    raise EAssertionFailed.Create(Msg);
 end;
 
 // Test basic list
@@ -14,30 +33,28 @@ procedure TestList;
 var
   Stream: TStream;
   Reader: TJsonReader;
-
-  num: integer;
-
-  i: integer;
+  Num:    Integer;
+  i:      Integer;
 const
-  sample = '[1,2,3]';
+  Sample = '[1,2,3]';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     for i := 1 to 3 do
     begin
       Reader.Advance;
-      AssertTrue(Reader.Number(num));
-      assert(num = i);
+      Check(Reader.Number(Num));
+      assert(Num = i);
     end;
 
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -50,33 +67,33 @@ var
   Stream: TStream;
   Reader: TJsonReader;
 
-  num: integer;
-  str: string;
+  Num:    Integer;
+  Str:    string;
 
-  i: integer;
+  i:      Integer;
 const
-  sample = '{"abc":1,"def":2,"ghi":3}';
-  keys: array [1..3] of string = ('abc', 'def', 'ghi');
+  Sample = '{"abc":1,"def":2,"ghi":3}';
+  Keys: array [1..3] of string = ('abc', 'def', 'ghi');
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     for i := 1 to 3 do
     begin
       Reader.Advance;
-      AssertTrue(Reader.Key(str));
-      AssertTrue(str = keys[i]);
-      AssertTrue(Reader.Number(num));
-      AssertTrue(num = i);
+      Check(Reader.Key(Str));
+      Check(Str = Keys[i]);
+      Check(Reader.Number(Num));
+      Check(Num = i);
     end;
 
-    AssertTrue(Reader.Advance = jsDictEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsEOF);
 
   finally
     FreeAndNil(Stream);
@@ -89,13 +106,11 @@ procedure TestDictsListsMix;
 var
   Stream: TStream;
   Reader: TJsonReader;
-
-  num: integer;
-  str: string;
-
-  i: integer;
+  Num:    Integer;
+  Str:    string;
+  i:      Integer;
 const
-  sample =
+  Sample =
     '{'#13#10 +
       '"abc" : ['#13#10+
         '{"nest":'#13#10 +
@@ -108,112 +123,112 @@ begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'abc');
+    Check(Reader.Key(Str));
+    Check(Str = 'abc');
 
-    AssertTrue(Reader.List);
-
-    Reader.Advance;
-
-    AssertTrue(Reader.Dict);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'nest');
-
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'nest2');
+    Check(Reader.Key(Str));
+    Check(Str = 'nest');
 
-    AssertTrue(Reader.List);
+    Check(Reader.Dict);
+
+    Reader.Advance;
+
+    Check(Reader.Key(Str));
+    Check(Str = 'nest2');
+
+    Check(Reader.List);
 
     for i := 1 to 3 do
     begin
       Reader.Advance;
-      AssertTrue(Reader.Number(num));
-      AssertTrue(num = i);
+      Check(Reader.Number(Num));
+      Check(Num = i);
     end;
 
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsDictEnd);
-    AssertTrue(Reader.Advance = jsDictEnd);
-    AssertTrue(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'def');
+    Check(Reader.Key(Str));
+    Check(Str = 'def');
 
-    AssertTrue(Reader.List);
-
-    Reader.Advance;
-
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 1);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 2);
-
-    AssertTrue(Reader.Advance = jsListEnd);
+    Check(Reader.Number(Num));
+    Check(Num = 1);
 
     Reader.Advance;
 
-    AssertTrue(Reader.List);
+    Check(Reader.Number(Num));
+    Check(Num = 2);
+
+    Check(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 4);
-
-    AssertTrue(Reader.Advance = jsListEnd);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(num));
+    Check(Reader.Number(Num));
+    Check(Num = 4);
 
-    assert(num = 5);
-
-    AssertTrue(Reader.Advance = jsListEnd);
-
-    Reader.Advance;
-
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 6);
+    Check(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
-    AssertTrue(Reader.List);
+    Check(Reader.Number(Num));
+
+    assert(Num = 5);
+
+    Check(Reader.Advance = jsListEnd);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(num));
-    AssertTRue(num = 7);
+    Check(Reader.Number(Num));
+    Check(Num = 6);
 
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsDictEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Reader.Advance;
+
+    Check(Reader.List);
+
+    Reader.Advance;
+
+    Check(Reader.Number(Num));
+    Check(Num = 7);
+
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsEOF);
 
   finally
     FreeAndNil(Stream);
@@ -226,107 +241,107 @@ procedure TestErrorRecovery;
 var
   Stream: TStream;
   Reader: TJsonReader;
-  str: string;
+  Str:    string;
 const
   // Malformed JSON
-  sample = '[{"a":"b"}{"c":"d","e"}{"f":"g"]}';
+  Sample = '[{"a":"b"}{"c":"d","e"}{"f":"g"]}';
   //                  ^           ^^       ^^
   //                  1           23       45
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'a');
+    Check(Reader.Key(Str));
+    Check(Str = 'a');
 
-    AssertTrue(Reader.Str(str));
-    AssertTrue(str = 'b');
+    Check(Reader.Str(Str));
+    Check(Str = 'b');
 
     Reader.Advance;
 
-    AssertTrue(Reader.State = jsDictEnd);
+    Check(Reader.State = jsDictEnd);
 
     Reader.Advance;
 
     // 1st error
 
-    AssertTrue(Reader.State = jsError);
+    Check(Reader.State = jsError);
 
     Reader.Proceed;
     Reader.Advance;
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'c');
+    Check(Reader.Key(Str));
+    Check(Str = 'c');
 
-    AssertTrue(Reader.Str(str));
-    AssertTrue(str = 'd');
+    Check(Reader.Str(Str));
+    Check(Str = 'd');
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'e');
+    Check(Reader.Key(Str));
+    Check(Str = 'e');
 
     // 2nd error
 
-    AssertTrue(Reader.Error);
+    Check(Reader.Error);
 
     Reader.Proceed;
 
-    AssertTrue(Reader.State = jsNull);
+    Check(Reader.State = jsNull);
 
-    AssertTrue(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsDictEnd);
 
     // 3rd error
 
     Reader.Advance;
-    AssertTrue(Reader.Error);
+    Check(Reader.Error);
 
     Reader.Proceed;
     Reader.Advance;
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(str));
-    AssertTrue(str = 'f');
+    Check(Reader.Key(Str));
+    Check(Str = 'f');
 
-    AssertTrue(Reader.Str(str));
-    AssertTrue(str = 'g');
+    Check(Reader.Str(Str));
+    Check(Str = 'g');
 
     // 4th error
 
     Reader.Advance;
-    AssertTrue(Reader.Error);
+    Check(Reader.Error);
 
     Reader.Proceed;
 
-    AssertTrue(Reader.Advance = jsDictEnd);
-    AssertTrue(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsListEnd);
 
     // 5th error
 
     Reader.Advance;
-    AssertTrue(Reader.Error);
+    Check(Reader.Error);
 
     Reader.Proceed;
 
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsEOF);
 
   finally
     FreeAndNil(Stream);
@@ -339,36 +354,36 @@ procedure TestSkip;
 var
   Stream: TStream;
   Reader: TJsonReader;
-  num:    integer;
+  Num:    Integer;
 const
-  sample = '[1,[2,[3,4],[5]],6]';
+  Sample = '[1,[2,[3,4],[5]],6]';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 1);
+    Check(Reader.Number(Num));
+    Check(Num = 1);
 
     Reader.Advance;
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Skip;
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 6);
+    Check(Reader.Number(Num));
+    Check(Num = 6);
 
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -380,38 +395,38 @@ procedure TestSkipWithErrors;
 var
   Stream: TStream;
   Reader: TJsonReader;
-  num:    integer;
+  Num:    Integer;
 const
-  sample = '[1,{2,"a":"b"},3]';
+  Sample = '[1,{2,"a":"b"},3]';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Advance;
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 1);
+    Check(Reader.Number(Num));
+    Check(Num = 1);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     Reader.Skip;
 
-    AssertTrue(Reader.Advance = jsError);
+    Check(Reader.Advance = jsError);
 
-    AssertTrue(Reader.Proceed);
-    AssertTrue(Reader.Proceed);
+    Check(Reader.Proceed);
+    Check(Reader.Proceed);
 
-    AssertTrue(Reader.Number(num));
-    AssertTrue(num = 3);
+    Check(Reader.Number(Num));
+    Check(Num = 3);
 
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -426,33 +441,33 @@ var
   Reader: TJsonReader;
   b:      Boolean;
 const
-  sample = '[true,false,true]';
+  Sample = '[true,false,true]';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Bool(b));
-    AssertTrue(b);
+    Check(Reader.Bool(b));
+    Check(b);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Bool(b));
-    AssertTrue(not b);
+    Check(Reader.Bool(b));
+    Check(not b);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Bool(b));
-    AssertTrue(b);
+    Check(Reader.Bool(b));
+    Check(b);
 
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -467,34 +482,34 @@ var
   b:      Boolean;
   k:      string;
 const
-  sample = '{"foo":true,"bar":false}';
+  Sample = '{"foo":true,"bar":false}';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(k));
-    AssertTrue(k = 'foo');
+    Check(Reader.Key(k));
+    Check(k = 'foo');
 
-    AssertTrue(Reader.Bool(b));
-    AssertTrue(b);
+    Check(Reader.Bool(b));
+    Check(b);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Key(k));
-    AssertTrue(k = 'bar');
+    Check(Reader.Key(k));
+    Check(k = 'bar');
 
-    AssertTrue(Reader.Bool(b));
-    AssertTrue(not b);
+    Check(Reader.Bool(b));
+    Check(not b);
 
-    AssertTrue(Reader.Advance = jsDictEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -507,44 +522,44 @@ var
   Stream: TStream;
   Reader: TJsonReader;
 
-  dbl: double;
-  int: integer;
-  u64: uint64;
+  Dbl:    double;
+  Int:    Integer;
+  U64:    UInt64;
 const
-  sample = '[3.14,-42,1.024e3,9223372036854775808]';
+  Sample = '[3.14,-42,1.024e3,9223372036854775808]';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
     Reader.Advance;
 
-    AssertTrue(not Reader.Number(int));
-    AssertTrue(Reader.Number(dbl));
-    AssertTrue(dbl = double(3.14));
+    Check(not Reader.Number(Int));
+    Check(Reader.Number(Dbl));
+    Check(Dbl = double(3.14));
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(int));
-    AssertTrue(int = -42);
+    Check(Reader.Number(Int));
+    Check(Int = -42);
 
     Reader.Advance;
 
-    AssertTrue(Reader.Number(dbl));
-    AssertTrue(dbl = 1024);
+    Check(Reader.Number(Dbl));
+    Check(Dbl = 1024);
 
     Reader.Advance;
 
-    AssertTrue(not Reader.Number(int));
-    AssertTrue(Reader.Number(u64));
-    AssertTrue(u64 = uint64(9223372036854775808));
+    Check(not Reader.Number(Int));
+    Check(Reader.Number(U64));
+    Check(U64 = uint64(9223372036854775808));
 
-    AssertTrue(Reader.Advance = jsListEnd);
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -556,22 +571,21 @@ procedure TestEscapeSequences;
 var
   Stream: TStream;
   Reader: TJsonReader;
-
-  str: string;
+  Str:    string;
 const
-  sample = '"Hello \u0041 World\tTab\r\nNewLine"';
-  expected = 'Hello A World'#9'Tab'#13#10'NewLine';
+  Sample   = '"Hello \u0041 World\tTab\r\nNewLine"';
+  Expected = 'Hello A World'#9'Tab'#13#10'NewLine';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.Str(str));
-    AssertTrue(str = expected);
+    Check(Reader.Str(Str));
+    Check(Str = Expected);
 
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -583,28 +597,27 @@ procedure TestInvalidEscapeSequences;
 var
   Stream: TStream;
   Reader: TJsonReader;
-
-  str: string;
+  Str:    string;
 const
-  sample = '"a \u41 b\x"';
-  expected = 'a A b\x';
+  Sample   = '"a \u41 b\x"';
+  Expected = 'a A b\x';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(not Reader.Str(str));
+    Check(not Reader.Str(Str));
     Reader.Proceed;
 
-    AssertTrue(not Reader.Str(str));
+    Check(not Reader.Str(Str));
     Reader.Proceed;
 
-    AssertTrue(Reader.Str(str));
-    AssertTrue(str = expected);
+    Check(Reader.Str(Str));
+    Check(Str = Expected);
 
-    AssertTrue(Reader.Advance = jsEOF);
+    Check(Reader.Advance = jsEOF);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -616,75 +629,75 @@ procedure TestStrBuf;
 var
   Stream: TStream;
   Reader: TJsonReader;
-  buf: string;
-  n: SizeInt;
+  Buf:    string;
+  n:      SizeInt;
 const
-  sample = '["Hello World", "Hello \u0041 World", "\u0041\u0042\u0043\u0044\r\n\u0045\u0046", "", "Hell\u00f6 W\u00f6rld"]';
+  Sample = '["Hello World", "Hello \u0041 World", "\u0041\u0042\u0043\u0044\r\n\u0045\u0046", "", "Hell\u00f6 W\u00f6rld"]';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.List);
+    Check(Reader.List);
 
-    AssertTrue(Reader.Advance = jsString);
+    Check(Reader.Advance = jsString);
 
-    buf := '';
-    SetLength(buf, 5);
+    Buf := '';
+    SetLength(Buf, 5);
 
     // "Hello World"
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' Worl'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 1) and (Copy(buf, 1, n) = 'd'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 0));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'Hello'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = ' Worl'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 1) and (Copy(Buf, 1, n) = 'd'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 0));
 
-    AssertTrue(Reader.Advance = jsString);
+    Check(Reader.Advance = jsString);
 
     // Hello A World
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' A Wo'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 0));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'Hello'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = ' A Wo'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 3) and (Copy(Buf, 1, n) = 'rld'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 0));
 
-    AssertTrue(Reader.Advance = jsString);
+    Check(Reader.Advance = jsString);
 
     // ABCD\n\rEF
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'ABCD'#13));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 3) and (Copy(buf, 1, n) = #10'EF'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 0));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'ABCD'#13));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 3) and (Copy(Buf, 1, n) = #10'EF'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 0));
 
-    AssertTrue(Reader.Advance = jsString);
+    Check(Reader.Advance = jsString);
 
     // ""
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue(n = 0);
+    n := Reader.StrBuf(Buf[1], 5);
+    Check(n = 0);
 
-    AssertTrue(Reader.Advance = jsString);
+    Check(Reader.Advance = jsString);
 
     // Hellö Wörld
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hell'#$c3));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 5) and(Copy(buf, 1, n) = #$b6' W'#$c3#$b6));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
-    n := Reader.StrBuf(buf[1], 5);
-    AssertTrue((n = 0));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'Hell'#$c3));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 5) and(Copy(Buf, 1, n) = #$b6' W'#$c3#$b6));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 3) and (Copy(Buf, 1, n) = 'rld'));
+    n := Reader.StrBuf(Buf[1], 5);
+    Check((n = 0));
 
-    AssertTrue(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsListEnd);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -696,91 +709,91 @@ procedure TestKeyBuf;
 var
   Stream: TStream;
   Reader: TJsonReader;
-  buf: string;
-  n: SizeInt;
-  int: integer;
+  Buf:    string;
+  n:      SizeInt;
+  Int:    Integer;
 const
-  sample = '{"Hello World": 1, "Hello \u0041 World": 2, "\u0041\u0042\u0043\u0044\r\n\u0045\u0046":3, "":4, "Hell\u00f6 W\u00f6rld":5}';
+  Sample = '{"Hello World": 1, "Hello \u0041 World": 2, "\u0041\u0042\u0043\u0044\r\n\u0045\u0046":3, "":4, "Hell\u00f6 W\u00f6rld":5}';
 begin
   Stream := nil;
   Reader := nil;
   try
-    Stream := TStringStream.Create(sample);
+    Stream := TStringStream.Create(Sample);
     Reader := TJsonReader.Create(Stream);
 
-    AssertTrue(Reader.Dict);
+    Check(Reader.Dict);
 
-    AssertTrue(Reader.Advance = jsKey);
+    Check(Reader.Advance = jsKey);
 
-    buf := '';
-    SetLength(buf, 5);
+    Buf := '';
+    SetLength(Buf, 5);
 
     // "Hello World"
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' Worl'));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 1) and (Copy(buf, 1, n) = 'd'));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 0));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'Hello'));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = ' Worl'));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 1) and (Copy(Buf, 1, n) = 'd'));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 0));
 
-    AssertTrue(Reader.Number(int));
-    AssertTrue(int = 1);
+    Check(Reader.Number(Int));
+    Check(Int = 1);
 
-    AssertTrue(Reader.Advance = jsKey);
+    Check(Reader.Advance = jsKey);
 
     // Hello A World
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hello'));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = ' A Wo'));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 0));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'Hello'));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = ' A Wo'));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 3) and (Copy(Buf, 1, n) = 'rld'));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 0));
 
-    AssertTrue(Reader.Number(int));
-    AssertTrue(int = 2);
+    Check(Reader.Number(Int));
+    Check(Int = 2);
 
-    AssertTrue(Reader.Advance = jsKey);
+    Check(Reader.Advance = jsKey);
 
     // ABCD\n\rEF
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'ABCD'#13));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 3) and (Copy(buf, 1, n) = #10'EF'));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 0));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'ABCD'#13));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 3) and (Copy(Buf, 1, n) = #10'EF'));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 0));
 
-    AssertTrue(Reader.Number(int));
-    AssertTrue(int = 3);
+    Check(Reader.Number(Int));
+    Check(Int = 3);
 
-    AssertTrue(Reader.Advance = jsKey);
+    Check(Reader.Advance = jsKey);
 
     // ""
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue(n = 0);
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check(n = 0);
 
-    AssertTrue(Reader.Number(int));
-    AssertTrue(int = 4);
+    Check(Reader.Number(Int));
+    Check(Int = 4);
 
-    AssertTrue(Reader.Advance = jsKey);
+    Check(Reader.Advance = jsKey);
 
     // Hellö Wörld
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = 'Hell'#$c3));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 5) and (Copy(buf, 1, n) = #$b6' W'#$c3#$b6));
-    n := Reader.KeyBuf(buf[1], 5);
-    AssertTrue((n = 3) and (Copy(buf, 1, n) = 'rld'));
-    n := Reader.KeyBuf(buf[1], 5);
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = 'Hell'#$c3));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 5) and (Copy(Buf, 1, n) = #$b6' W'#$c3#$b6));
+    n := Reader.KeyBuf(Buf[1], 5);
+    Check((n = 3) and (Copy(Buf, 1, n) = 'rld'));
+    n := Reader.KeyBuf(Buf[1], 5);
     Assert(n = 0);
 
-    AssertTrue(Reader.Number(int));
-    AssertTrue(int = 5);
+    Check(Reader.Number(Int));
+    Check(Int = 5);
 
-    AssertTrue(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsDictEnd);
   finally
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -792,11 +805,11 @@ procedure TestIntRanges;
 var          
   Stream: TStream;
   Reader: TJsonReader;
-  i32: Int32;
-  u32: UInt32;
-  i64: Int64;
-  u64: UInt64;
-  dbl: Double;
+  i32:    Int32;
+  u32:    UInt32;
+  i64:    Int64;
+  u64:    UInt64;
+  dbl:    Double;
 const
   sample = '[7795000000, 2147483648, 9223372036854775808, 18446744073709551616]';
 begin
@@ -809,33 +822,33 @@ begin
     Reader.List; 
     Reader.Advance;
 
-    AssertTrue(not Reader.Number(i32));
-    AssertTrue(not Reader.Number(u32));
-    AssertTrue(Reader.Number(i64));
-    AssertTrue(i64 = 7795000000);
+    Check(not Reader.Number(i32));
+    Check(not Reader.Number(u32));
+    Check(Reader.Number(i64));
+    Check(i64 = 7795000000);
 
     Reader.Advance;
 
-    AssertTrue(not Reader.Number(i32));
-    AssertTrue(Reader.Number(u32));
-    AssertTrue(u32 = 2147483648);
+    Check(not Reader.Number(i32));
+    Check(Reader.Number(u32));
+    Check(u32 = 2147483648);
 
     Reader.Advance;
 
-    AssertTrue(not Reader.Number(i32));
-    AssertTrue(not Reader.Number(u32));
-    AssertTrue(not Reader.Number(i64));
-    AssertTrue(Reader.Number(u64));
-    AssertTrue(u64 = 9223372036854775808);
+    Check(not Reader.Number(i32));
+    Check(not Reader.Number(u32));
+    Check(not Reader.Number(i64));
+    Check(Reader.Number(u64));
+    Check(u64 = 9223372036854775808);
 
     Reader.Advance;
 
-    AssertTrue(not Reader.Number(i32));
-    AssertTrue(not Reader.Number(u32));
-    AssertTrue(not Reader.Number(i64));
-    AssertTrue(not Reader.Number(u64));
-    AssertTrue(Reader.Number(dbl));
-    AssertTrue(dbl = 18446744073709551616.0);
+    Check(not Reader.Number(i32));
+    Check(not Reader.Number(u32));
+    Check(not Reader.Number(i64));
+    Check(not Reader.Number(u64));
+    Check(Reader.Number(dbl));
+    Check(dbl = 18446744073709551616.0);
   finally  
     FreeAndNil(Stream);
     FreeAndNil(Reader);
@@ -849,25 +862,25 @@ type
   end;
 
 procedure _TestSample(
-  const Input: string;
+  const Input:    string;
   const Expected: string;
-  Features: TJsonFeatures;
-  Errors: array of TExpectedError;
-  Stubborn: Boolean = true
+  Features:       TJsonFeatures;
+  Errors:         array of TExpectedError;
+  Stubborn:       Boolean = true
 );
 var
   InStream, OutStream: TStream;
   Reader: TJsonReader;
   Writer: TJsonWriter;
   Actual: String;
-  ErrIdx: integer;
+  ErrIdx: Integer;
 
   function ReadValue: Boolean; forward;
 
   procedure CheckError;
   begin
     if ErrIdx > High(Errors) then
-      AssertTrue(false,
+      Check(false,
         Format(
           'Unexpected error: %d (%s) at %d.', [
             Integer(Reader.LastError), Reader.LastErrorMessage, Reader.LastErrorPosition
@@ -875,7 +888,7 @@ var
         )
       )
     else
-      AssertTrue(
+      Check(
         (Reader.LastError = Errors[ErrIdx].Err) and
         (Reader.LastErrorPosition = Errors[ErrIdx].Pos),
         Format(
@@ -927,10 +940,10 @@ var
 
   function ReadValue: Boolean;
   var
-    i64: int64;
-    u64: uint64;
-    dbl: double;
-    Str: string;
+    i64:  Int64;
+    u64:  UInt64;
+    dbl:  Double;
+    Str:  string;
     bool: Boolean;
   begin
     repeat
@@ -965,11 +978,11 @@ var
     until false;
   end;
 begin
-  InStream := nil;
+  InStream  := nil;
   OutStream := nil;
-  Reader := nil;
-  Writer := nil;
-  ErrIdx := 0;
+  Reader    := nil;
+  Writer    := nil;
+  ErrIdx    := 0;
   try
     InStream := TStringStream.Create(Input);
     OutStream := TMemoryStream.Create;
@@ -981,7 +994,7 @@ begin
     SetString(
       Actual, TMemoryStream(OutStream).Memory, TMemoryStream(OutStream).Size
     );
-    AssertTrue(
+    Check(
       Actual = Expected,
       Format(
         LineEnding + 'Expected: %s' +
@@ -992,7 +1005,7 @@ begin
 
     if ErrIdx < Length(Errors) then
     begin
-      AssertTrue(
+      Check(
         false,
         Format(
           'Expected %d errors, got only %d. First missing error: %d at %d.',
@@ -1011,10 +1024,10 @@ begin
 end;
 
 procedure TestSample(
-  const Input: string;
+  const Input:    string;
   const Expected: string;
-  Features: TJsonFeatures;
-  Errors: array of TExpectedError
+  Features:       TJsonFeatures;
+  Errors:         array of TExpectedError
 );
 begin
   if Length(Errors) > 0 then
@@ -1026,11 +1039,11 @@ begin
 end;
 
 procedure TestSample2(
-  const Input: string;
-  const Expected: string;
+  const Input:            string;
+  const Expected:         string;
   const ExpectedStubborn: string;
-  Features: TJsonFeatures;
-  Errors: array of TExpectedError
+  Features:               TJsonFeatures;
+  Errors:                 array of TExpectedError
 );
 begin
   if Length(Errors) > 0 then
