@@ -1,4 +1,4 @@
-// JsonStream Pascal Implementation v0.9.x
+// JsonStream Pascal Implementation v1.0
 //
 // Copyright 2021 Philip Zander
 //
@@ -18,6 +18,9 @@
 // COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
 // IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+//
+// Changelog:
+//   2021-10-18: Release version 1.0.0
 
 unit jsonstream;
 
