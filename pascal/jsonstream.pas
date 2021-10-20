@@ -547,10 +547,10 @@ begin
 end;
 
 procedure TJsonReader.SkipBoolean;
-var
-  dummy: Boolean;
 begin
-  Bool(dummy);
+  StackPop;
+  Reduce;
+  FSkip  := false;
 end;
 
 procedure TJsonReader.SkipString;
