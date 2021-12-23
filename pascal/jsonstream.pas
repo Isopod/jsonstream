@@ -20,6 +20,8 @@
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 //
 // Changelog:
+//   2021-12-23: Release version 1.0.1
+//               - Fixes assertion failure on skipping boolean value
 //   2021-10-18: Release version 1.0.0
 
 unit jsonstream;
