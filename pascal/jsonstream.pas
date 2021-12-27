@@ -582,7 +582,9 @@ var
 begin
   Result := false;
 
-  RefillBuffer(Length(Str));
+  // +1 because we need to check if the character after the string as a word
+  // boundary
+  RefillBuffer(Length(Str) + 1);
 
   if FLen < length(Str) then
     exit;
