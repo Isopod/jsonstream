@@ -433,6 +433,129 @@ begin
   end;
 end;
 
+procedure TestAutoSkip1;
+var
+  Stream: TStream;
+  Reader: TJsonReader;
+  Num:    Integer;
+const
+  Sample = '[1,2,3,4]';
+begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(Sample);
+    Reader := TJsonReader.Create(Stream);
+
+    Check(Reader.List);
+
+    Check(Reader.Advance = jsNumber); // 1
+    Check(Reader.Advance = jsNumber); // 2
+    Check(Reader.Advance = jsNumber); // 3
+    Check(Reader.Number(Num));
+    Check(Num = 3);
+    Check(Reader.Advance = jsNumber); // 4
+    Check(Reader.Number(Num));
+    Check(Num = 4);
+
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsEOF);
+  finally
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
+procedure TestAutoSkip2;
+var
+  Stream: TStream;
+  Reader: TJsonReader;
+  Num:    Integer;
+const
+  Sample = '[1,"2",false,null,[],{},42]';
+begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(Sample);
+    Reader := TJsonReader.Create(Stream);
+
+    Check(Reader.List);
+
+    Check(Reader.Advance = jsNumber);
+    Check(Reader.Advance = jsString);
+    Check(Reader.Advance = jsBoolean);
+    Check(Reader.Advance = jsNull);
+    Check(Reader.Advance = jsList);
+    Check(Reader.Advance = jsDict);
+    Check(Reader.Advance = jsNumber);
+    Check(Reader.Number(Num));
+    Check(Num = 42);
+
+    Check(Reader.Advance = jsListEnd);
+    Check(Reader.Advance = jsEOF);
+  finally
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
+procedure TestAutoSkip3;
+var
+  Stream: TStream;
+  Reader: TJsonReader;
+  Num:    Integer;
+  k:      String;
+const
+  Sample = '{"a":1,"b":"2","c":true,"d":null,"e":[],"f":{},"g":42}';
+begin
+  Stream := nil;
+  Reader := nil;
+  try
+    Stream := TStringStream.Create(Sample);
+    Reader := TJsonReader.Create(Stream);
+
+    Check(Reader.Dict);
+
+    Check(Reader.Advance = jsKey);
+    Check(Reader.Key(k));
+    Check(k = 'a');
+
+    Check(Reader.Advance = jsKey);
+    Check(Reader.Key(k));
+    Check(k = 'b');
+
+    Check(Reader.Advance = jsKey);
+    Check(Reader.Key(k));
+    Check(k = 'c');
+
+    Check(Reader.Advance = jsKey);
+    Check(Reader.Key(k));
+    Check(k = 'd');
+
+    Check(Reader.Advance = jsKey);
+    Check(Reader.Key(k));
+    Check(k = 'e');
+
+    Check(Reader.Advance = jsKey);
+    Check(Reader.Key(k));
+    Check(k = 'f');
+
+    Check(Reader.Advance = jsKey);
+    Check(Reader.Key(k));
+    Check(k = 'g');
+
+    Check(Reader.Number(Num));
+    Check(Num = 42);
+
+    Check(Reader.Advance = jsDictEnd);
+    Check(Reader.Advance = jsEOF);
+  finally
+    FreeAndNil(Stream);
+    FreeAndNil(Reader);
+  end;
+end;
+
 
 // Test booleans
 procedure TestBoolean;
@@ -1517,6 +1640,9 @@ begin
     TestErrorRecovery;
     TestSkip;
     TestSkipWithErrors;
+    TestAutoSkip1;
+    TestAutoSkip2;
+    TestAutoSkip3;
     TestBoolean;
     TestBoolsInDict;
     TestNumbers;

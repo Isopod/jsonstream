@@ -984,7 +984,7 @@ begin
   end;
 
   Result := FState;
-  FSkip := Result in [jsDict, jsKey, jsList, jsNumber, jsString];
+  FSkip := Result in [jsDict, jsKey, jsList, jsNumber, jsString, jsBoolean, jsNull];
 end;
 
 function TJsonReader.State: TJsonState;
