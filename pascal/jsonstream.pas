@@ -429,7 +429,7 @@ implementation
 uses
   math
   {$ifdef FPC}
-  {$ifndef WIN32}
+  {$ifndef MSWINDOWS}
   , cwstring
   {$endif}
   {$endif}
